@@ -1,0 +1,6 @@
+{
+  "name": "Controle de Reservas de Hóspedes",
+  "description": "Sistema de gestão e controle de reservas com visualização mensal, histórico com edição e filtros por status e período.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

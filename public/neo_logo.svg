@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 120" fill="none">
+  <!-- Sky-blue circle badge on the right -->
+  <circle cx="185" cy="60" r="54" fill="#1EA7FD" />
+  
+  <!-- "2.0" in white inside the sky-blue circle -->
+  <text x="185" y="77" text-anchor="middle" font-family="'Impact', 'Arial Black', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="52" fill="#FFFFFF" letter-spacing="-1">2.0</text>
+
+  <!-- "nEO" in dark navy blue (#08357B) -->
+  <!-- Letter n (arched at top, straight legs) -->
+  <path d="M14 105V40C14 20 28 14 44 14C60 14 74 20 74 40V105H55V43C55 33 50 29 44 29C38 29 33 33 33 43V105H14Z" fill="#09347A" />
+
+  <!-- Letter E -->
+  <path d="M85 16H126V32H103V52H123V67H103V89H127V105H85V16Z" fill="#09347A" />
+
+  <!-- Letter O (tall stadium shape) -->
+  <path d="M136 38C136 22 146 14 163 14C175 14 184 19 187 28L171 35C169 31 166 29 162 29C155 29 152 34 152 42V77C152 85 155 90 162 90C166 90 169 88 171 84L186 91C182 100 173 105 162 105C146 105 136 97 136 81V38Z" fill="#09347A" />
+</svg>
