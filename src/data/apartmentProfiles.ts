@@ -21,31 +21,41 @@ const PROPRIETARIOS_MOCK: { nome: string; ddd: string; tel: string; emailDom: st
   { nome: 'Vanessa Queiroz Rocha', ddd: '11', tel: '99678-2345', emailDom: 'gmail.com', tipo: 'inquilino' }
 ];
 
-export const INITIAL_APARTMENT_PROFILES: ApartmentProfile[] = BUILDING_APARTMENTS.map((apto, index) => {
-  const seed = PROPRIETARIOS_MOCK[index % PROPRIETARIOS_MOCK.length];
-  const num = parseInt(apto, 10);
-  
-  // Variação dos tipos proporcional: ~50% Morador, ~30% Inquilino, ~20% Temporada
-  let tipo: ApartmentType = 'morador';
-  if (num % 5 === 0 || num % 7 === 0) {
-    tipo = 'temporada';
-  } else if (num % 3 === 0) {
-    tipo = 'inquilino';
+export const INITIAL_APARTMENT_PROFILES: ApartmentProfile[] = [
+  ...BUILDING_APARTMENTS.map((apto, index) => {
+    const seed = PROPRIETARIOS_MOCK[index % PROPRIETARIOS_MOCK.length];
+    const num = parseInt(apto, 10);
+    
+    // Variação dos tipos proporcional: ~50% Morador, ~30% Inquilino, ~20% Temporada
+    let tipo: ApartmentType = 'morador';
+    if (num % 5 === 0 || num % 7 === 0) {
+      tipo = 'temporada';
+    } else if (num % 3 === 0) {
+      tipo = 'inquilino';
+    }
+
+    const cleanFirstName = seed.nome.split(' ')[0].toLowerCase();
+    const cleanLastName = seed.nome.split(' ').slice(-1)[0].toLowerCase();
+
+    return {
+      apto,
+      proprietario: `${seed.nome} ${index > 15 ? `(Apto ${apto})` : ''}`.replace(` (Apto ${apto})`, ''),
+      celular: `(${seed.ddd}) ${seed.tel}`,
+      email: `${cleanFirstName}.${cleanLastName}${apto}@${seed.emailDom}`,
+      tipoApto: tipo,
+      observacoes: tipo === 'temporada' 
+        ? 'Unidade gerida por locação de curta temporada (Airbnb/Booking)' 
+        : tipo === 'inquilino' 
+        ? 'Contrato de locação residencial padrão ativo' 
+        : 'Proprietário residente'
+    };
+  }),
+  {
+    apto: 'Condomínio',
+    proprietario: 'Administração Predial / Síndico',
+    celular: '(11) 98000-0000',
+    email: 'administracao@condominio.com.br',
+    tipoApto: 'morador',
+    observacoes: 'Unidade administrativa, zeladoria e áreas comuns do condomínio'
   }
-
-  const cleanFirstName = seed.nome.split(' ')[0].toLowerCase();
-  const cleanLastName = seed.nome.split(' ').slice(-1)[0].toLowerCase();
-
-  return {
-    apto,
-    proprietario: `${seed.nome} ${index > 15 ? `(Apto ${apto})` : ''}`.replace(` (Apto ${apto})`, ''),
-    celular: `(${seed.ddd}) ${seed.tel}`,
-    email: `${cleanFirstName}.${cleanLastName}${apto}@${seed.emailDom}`,
-    tipoApto: tipo,
-    observacoes: tipo === 'temporada' 
-      ? 'Unidade gerida por locação de curta temporada (Airbnb/Booking)' 
-      : tipo === 'inquilino' 
-      ? 'Contrato de locação residencial padrão ativo' 
-      : 'Proprietário residente'
-  };
-});
+];

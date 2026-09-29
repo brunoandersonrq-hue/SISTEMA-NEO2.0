@@ -201,7 +201,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
           <div>
             <h2 className="text-lg font-bold text-slate-900">Cadastros dos Apartamentos</h2>
             <p className="text-xs text-slate-500">
-              Registro completo dos {BUILDING_APARTMENTS.length} apartamentos com proprietário, celular, e-mail e tipo de ocupação
+              Registro completo dos {apartments.length} cadastros de apartamentos com proprietário, celular, e-mail e tipo de ocupação
             </p>
           </div>
         </div>
@@ -425,13 +425,17 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
                           </div>
                         </td>
                         <td className="py-3 px-4 text-slate-600">
-                          <a
-                            href={`mailto:${item.email}`}
-                            className="hover:text-blue-700 hover:underline flex items-center gap-1 truncate max-w-xs"
-                          >
-                            <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{item.email}</span>
-                          </a>
+                          {item.email ? (
+                            <a
+                              href={`mailto:${item.email}`}
+                              className="hover:text-blue-700 hover:underline flex items-center gap-1 truncate max-w-xs"
+                            >
+                              <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="truncate">{item.email}</span>
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 text-xs italic">—</span>
+                          )}
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
                           {getTypeBadge(item.tipoApto)}
@@ -607,13 +611,15 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">E-mail de Contato</label>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  E-mail de Contato <span className="text-slate-400 font-normal text-[11px]">(Opcional)</span>
+                </label>
                 <input
                   type="email"
                   value={editingApto.email}
+                  placeholder="email@exemplo.com (opcional)"
                   onChange={(e) => setEditingApto({ ...editingApto, email: e.target.value })}
                   className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
-                  required
                 />
               </div>
 
@@ -759,12 +765,11 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
 
                 <div>
                   <label className="font-semibold text-slate-700 block mb-1">
-                    E-mail de Contato *
+                    E-mail de Contato <span className="text-slate-400 font-normal text-[11px]">(Opcional)</span>
                   </label>
                   <input
                     type="email"
-                    required
-                    placeholder="email@exemplo.com"
+                    placeholder="email@exemplo.com (opcional)"
                     value={newAptoData.email}
                     onChange={(e) =>
                       setNewAptoData({ ...newAptoData, email: e.target.value })

@@ -1,49 +1,26 @@
 import React, { useState, useMemo } from 'react';
-import { Dumbbell, ShieldCheck, CheckCircle2, Key, Clock, Search, X, CheckCheck, RotateCcw, AlertTriangle, Calendar } from 'lucide-react';
+import { Dumbbell, ShieldCheck, CheckCircle2, Key, Clock, Search, X, CheckCheck, RotateCcw, AlertTriangle, Calendar, Trash2 } from 'lucide-react';
 import { getBrasiliaCurrentDateTime } from '../utils/formatters.ts';
+import { GymKeyTurn } from '../types.ts';
+import { INITIAL_GYM_TURNS } from '../data/condoMockData.ts';
 
-interface GymKeyTurn {
-  id: string;
-  apto: string;
-  responsavel: string;
-  item: 'Chave Principal da Academia' | 'Cartão de Acesso / Tag' | 'Chave Armário / Vestiário' | string;
-  horario: string;
-  status: 'em_uso' | 'devolvido';
-  observacaoDevolucao?: string;
-  dataDevolucao?: string;
-  teveNaoConformidade?: boolean;
+export interface GymViewProps {
+  turns?: GymKeyTurn[];
+  onAddTurn?: (turn: GymKeyTurn) => void;
+  onUpdateTurn?: (turn: GymKeyTurn) => void;
+  isAdmin?: boolean;
+  onClearModule?: () => void;
 }
 
-export const GymView: React.FC = () => {
-  const [turns, setTurns] = useState<GymKeyTurn[]>([
-    {
-      id: 'g-1',
-      apto: '502',
-      responsavel: 'Rafael Santos',
-      item: 'Chave Principal da Academia',
-      horario: '2026-09-22',
-      status: 'em_uso'
-    },
-    {
-      id: 'g-2',
-      apto: '304',
-      responsavel: 'Juliana Mendes',
-      item: 'Chave Principal da Academia',
-      horario: '2026-09-22',
-      status: 'em_uso'
-    },
-    {
-      id: 'g-3',
-      apto: '108',
-      responsavel: 'Thiago Oliveira',
-      item: 'Cartão de Acesso / Tag',
-      horario: '2026-09-22',
-      status: 'devolvido',
-      dataDevolucao: '2026-09-22 às 09:40',
-      observacaoDevolucao: 'Chave e chaveiro devolvidos intactos na recepção.',
-      teveNaoConformidade: false
-    }
-  ]);
+export const GymView: React.FC<GymViewProps> = ({
+  turns: propTurns,
+  onAddTurn,
+  onUpdateTurn,
+  isAdmin,
+  onClearModule
+}) => {
+  const [localTurns, setLocalTurns] = useState<GymKeyTurn[]>(INITIAL_GYM_TURNS);
+  const turns = propTurns ?? localTurns;
 
   const [newTurn, setNewTurn] = useState({
     apto: '',
@@ -90,17 +67,19 @@ export const GymView: React.FC = () => {
   const handleAddTurn = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTurn.apto || !newTurn.responsavel) return;
-    setTurns([
-      ...turns,
-      {
-        id: `gym-key-${Date.now()}`,
-        apto: newTurn.apto,
-        responsavel: newTurn.responsavel,
-        item: newTurn.item,
-        horario: newTurn.horario,
-        status: 'em_uso'
-      }
-    ]);
+    const newEntry: GymKeyTurn = {
+      id: `gym-key-${Date.now()}`,
+      apto: newTurn.apto,
+      responsavel: newTurn.responsavel,
+      item: newTurn.item,
+      horario: newTurn.horario,
+      status: 'em_uso'
+    };
+    if (onAddTurn) {
+      onAddTurn(newEntry);
+    } else {
+      setLocalTurns((prev) => [...prev, newEntry]);
+    }
     setNewTurn({ apto: '', responsavel: '', item: 'Chave Principal da Academia', horario: '2026-09-22' });
     setShowAddForm(false);
   };
@@ -124,18 +103,19 @@ export const GymView: React.FC = () => {
       formattedDataDevolucao = `${todayFormatted} às ${nowFormatted}`;
     }
 
-    setTurns(turns.map(t => {
-      if (t.id === selectedTurnForReturn.id) {
-        return {
-          ...t,
-          status: 'devolvido',
-          dataDevolucao: formattedDataDevolucao,
-          observacaoDevolucao: returnObs.trim() || (hasNonConformity ? 'Não conformidade informada sem detalhes adicionais.' : 'Chave devolvida sem ressalvas na recepção.'),
-          teveNaoConformidade: hasNonConformity
-        };
-      }
-      return t;
-    }));
+    const updatedTurn: GymKeyTurn = {
+      ...selectedTurnForReturn,
+      status: 'devolvido',
+      dataDevolucao: formattedDataDevolucao,
+      observacaoDevolucao: returnObs.trim() || (hasNonConformity ? 'Não conformidade informada sem detalhes adicionais.' : 'Chave devolvida sem ressalvas na recepção.'),
+      teveNaoConformidade: hasNonConformity
+    };
+
+    if (onUpdateTurn) {
+      onUpdateTurn(updatedTurn);
+    } else {
+      setLocalTurns((prev) => prev.map((t) => (t.id === updatedTurn.id ? updatedTurn : t)));
+    }
 
     setSelectedTurnForReturn(null);
     setReturnObs('');
@@ -163,6 +143,22 @@ export const GymView: React.FC = () => {
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>07h00 às 22h00</span>
           </div>
+
+          {isAdmin && onClearModule && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Atenção Administrador: Deseja limpar todos os registros e histórico da Sala Academia?')) {
+                  onClearModule();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-colors cursor-pointer"
+              title="Limpar todos os registros deste módulo (Função Administrador)"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span>Limpar Módulo</span>
+            </button>
+          )}
 
           <button
             type="button"

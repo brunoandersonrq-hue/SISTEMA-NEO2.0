@@ -14,6 +14,9 @@ import { PackagesView } from './components/PackagesView.tsx';
 import { IncidentLogView } from './components/IncidentLogView.tsx';
 import { DirectoryView } from './components/DirectoryView.tsx';
 import { HousekeepingView } from './components/HousekeepingView.tsx';
+import { DataManagementModal } from './components/DataManagementModal.tsx';
+import { LoginScreen } from './components/LoginScreen.tsx';
+import { UserManagementModal } from './components/UserManagementModal.tsx';
 
 import {
   Reservation,
@@ -23,14 +26,19 @@ import {
   IncidentRecord,
   AmenityReservation,
   AmenityStatus,
-  ApartmentProfile
+  ApartmentProfile,
+  UserAccount,
+  GameTurn,
+  GymKeyTurn
 } from './types.ts';
 import { INITIAL_RESERVATIONS, BUILDING_APARTMENTS } from './data/mockReservations.ts';
 import { INITIAL_APARTMENT_PROFILES } from './data/apartmentProfiles.ts';
 import {
   INITIAL_PACKAGES,
   INITIAL_INCIDENTS,
-  INITIAL_AMENITY_RESERVATIONS
+  INITIAL_AMENITY_RESERVATIONS,
+  INITIAL_GAMES_TURNS,
+  INITIAL_GYM_TURNS
 } from './data/condoMockData.ts';
 import { getBrasiliaCurrentDateTime, getBrasiliaTodayDate } from './utils/formatters.ts';
 import {
@@ -40,7 +48,8 @@ import {
   RefreshCw,
   Building2,
   Menu,
-  BedDouble
+  BedDouble,
+  Database
 } from 'lucide-react';
 
 const STORAGE_KEY = 'controle_reservas_hospedes_v1';
@@ -48,19 +57,157 @@ const PACKAGES_KEY = 'controle_encomendas_v1';
 const INCIDENTS_KEY = 'controle_ocorrencias_v1';
 const AMENITIES_KEY = 'controle_amenities_v1';
 const APARTMENTS_KEY = 'controle_apartamentos_cadastros_v1';
+const GAMES_ROOM_KEY = 'controle_sala_jogos_v1';
+const GYM_KEY = 'controle_sala_academia_v1';
+const USERS_KEY = 'controle_usuarios_operadores_v1';
+const CURRENT_USER_KEY = 'controle_usuario_logado_v1';
+
+const DEFAULT_USERS: UserAccount[] = [
+  {
+    id: 'user_admin',
+    username: 'admin',
+    nome: 'Administrador Síndico',
+    cargo: 'Administração Predial',
+    role: 'admin',
+    senhaHash: '123321',
+    criadoEm: '2026-01-01'
+  },
+  {
+    id: 'user_portaria',
+    username: 'portaria',
+    nome: 'Operador de Portaria',
+    cargo: 'Recepção / Controle de Acesso',
+    role: 'portaria',
+    senhaHash: '1234',
+    criadoEm: '2026-01-01'
+  }
+];
 
 export default function App() {
+  // Authentication & Users State
+  const [users, setUsers] = useState<UserAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem(USERS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar usuários:', e);
+    }
+    return DEFAULT_USERS;
+  });
+
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem(CURRENT_USER_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar sessão do usuário:', e);
+    }
+    return null;
+  });
+
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+
+  // Sync users to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [users]);
+
+  // Sync current user to localStorage
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem(CURRENT_USER_KEY);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [currentUser]);
+
+  const handleLoginSuccess = (user: UserAccount) => {
+    setCurrentUser(user);
+    showToast(`Bem-vindo, ${user.nome || user.username}!`, 'success');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setIsUserModalOpen(false);
+    showToast('Você saiu do sistema. Até logo!', 'info');
+  };
+
+  const handleUpdatePassword = (userId: string, newPass: string) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, senhaHash: newPass } : u))
+    );
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser((prev) => (prev ? { ...prev, senhaHash: newPass } : null));
+    }
+  };
+
+  const handleCreateUser = (newUser: Omit<UserAccount, 'id' | 'criadoEm'>) => {
+    const created: UserAccount = {
+      ...newUser,
+      id: `user_${Date.now()}`,
+      status: newUser.status || 'ativo',
+      criadoEm: getBrasiliaTodayDate()
+    };
+    setUsers((prev) => [...prev, created]);
+  };
+
+  const handleUpdateUser = (updatedUser: UserAccount) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
+    );
+    if (currentUser && currentUser.id === updatedUser.id) {
+      setCurrentUser(updatedUser);
+    }
+  };
+
+  const handleToggleUserStatus = (userId: string) => {
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === userId) {
+          const newStatus = u.status === 'inativo' ? 'ativo' : 'inativo';
+          return { ...u, status: newStatus };
+        }
+        return u;
+      })
+    );
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser((prev) => {
+        if (!prev) return null;
+        return { ...prev, status: prev.status === 'inativo' ? 'ativo' : 'inativo' };
+      });
+    }
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
+  };
+
   // Navigation Module: default to 'inicio' (Tela inicial)
   const [activeModule, setActiveModule] = useState<SystemModule>('inicio');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
+  const [housekeepingVersion, setHousekeepingVersion] = useState(0);
 
   // Load reservations from localStorage with fallback to INITIAL_RESERVATIONS
   const [reservations, setReservations] = useState<Reservation[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       }
@@ -112,13 +259,31 @@ export default function App() {
     return INITIAL_AMENITY_RESERVATIONS;
   });
 
-  // Apartments Profiles State (124 units registry)
+  // Apartments Profiles State (125 units registry)
   const [apartments, setApartments] = useState<ApartmentProfile[]>(() => {
     try {
       const saved = localStorage.getItem(APARTMENTS_KEY);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hasCondo = parsed.some(
+            (a) => a.apto.toLowerCase() === 'condomínio' || a.apto.toLowerCase() === 'condominio'
+          );
+          if (!hasCondo && parsed.length === 124) {
+            return [
+              ...parsed,
+              {
+                apto: 'Condomínio',
+                proprietario: 'Administração Predial / Síndico',
+                celular: '(11) 98000-0000',
+                email: 'administracao@condominio.com.br',
+                tipoApto: 'morador' as const,
+                observacoes: 'Unidade administrativa, zeladoria e áreas comuns do condomínio'
+              }
+            ];
+          }
+          return parsed;
+        }
       }
     } catch (e) {
       console.warn('Erro ao carregar cadastro de apartamentos:', e);
@@ -144,6 +309,148 @@ export default function App() {
       return [newApto, ...prev];
     });
     showToast(`Apartamento ${newApto.apto} cadastrado com sucesso!`, 'success');
+  };
+
+  // Games Room Turns State
+  const [gamesTurns, setGamesTurns] = useState<GameTurn[]>(() => {
+    try {
+      const saved = localStorage.getItem(GAMES_ROOM_KEY);
+      if (saved !== null) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar jogos:', e);
+    }
+    return INITIAL_GAMES_TURNS;
+  });
+
+  // Gym Key Turns State
+  const [gymTurns, setGymTurns] = useState<GymKeyTurn[]>(() => {
+    try {
+      const saved = localStorage.getItem(GYM_KEY);
+      if (saved !== null) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar academia:', e);
+    }
+    return INITIAL_GYM_TURNS;
+  });
+
+  // Games Room Handlers
+  const handleAddGameTurn = (turn: GameTurn) => {
+    setGamesTurns((prev) => [...prev, turn]);
+    showToast(`Empréstimo registrado para o apto ${turn.apto}!`, 'success');
+  };
+
+  const handleUpdateGameTurn = (updated: GameTurn) => {
+    setGamesTurns((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    showToast('Devolução confirmada na Sala de Jogos!', 'success');
+  };
+
+  // Gym Room Handlers
+  const handleAddGymTurn = (turn: GymKeyTurn) => {
+    setGymTurns((prev) => [...prev, turn]);
+    showToast(`Chave/tag da academia retirada pelo apto ${turn.apto}!`, 'success');
+  };
+
+  const handleUpdateGymTurn = (updated: GymKeyTurn) => {
+    setGymTurns((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    showToast('Devolução confirmada na Sala Academia!', 'success');
+  };
+
+  // Data management cleanup handlers
+  const handleClearReservations = () => {
+    setReservations([]);
+    showToast('Reservas de exemplo removidas. Sistema pronto para novos cadastros.', 'success');
+  };
+
+  const handleClearPackages = () => {
+    setPackages([]);
+    showToast('Encomendas de exemplo removidas.', 'success');
+  };
+
+  const handleClearIncidents = () => {
+    setIncidents([]);
+    showToast('Ocorrências de exemplo removidas.', 'success');
+  };
+
+  const handleClearAmenities = () => {
+    setAmenities([]);
+    showToast('Reservas de espaços removidas.', 'success');
+  };
+
+  const handleClearHousekeeping = () => {
+    try {
+      localStorage.setItem('controle_camareiras_slots_v1', JSON.stringify([]));
+      localStorage.removeItem('controle_camareiras_observacoes_notas_v1');
+    } catch (e) {
+      console.error(e);
+    }
+    setHousekeepingVersion((v) => v + 1);
+    showToast('Escala de camareiras zerada com sucesso.', 'success');
+  };
+
+  const handleClearGamesRoom = () => {
+    setGamesTurns([]);
+    try {
+      localStorage.setItem(GAMES_ROOM_KEY, JSON.stringify([]));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast('Registros da Sala de Jogos limpos com sucesso.', 'success');
+  };
+
+  const handleClearGym = () => {
+    setGymTurns([]);
+    try {
+      localStorage.setItem(GYM_KEY, JSON.stringify([]));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast('Registros da Sala Academia limpos com sucesso.', 'success');
+  };
+
+  const handleClearAllDemoData = () => {
+    setReservations([]);
+    setPackages([]);
+    setIncidents([]);
+    setAmenities([]);
+    setGamesTurns([]);
+    setGymTurns([]);
+    try {
+      localStorage.setItem('controle_camareiras_slots_v1', JSON.stringify([]));
+      localStorage.removeItem('controle_camareiras_observacoes_notas_v1');
+      localStorage.setItem(GAMES_ROOM_KEY, JSON.stringify([]));
+      localStorage.setItem(GYM_KEY, JSON.stringify([]));
+    } catch (e) {
+      console.error(e);
+    }
+    setHousekeepingVersion((v) => v + 1);
+    showToast('Todos os dados de exemplo foram removidos! Condomínio pronto para uso real.', 'success');
+  };
+
+  const handleRestoreDemoData = () => {
+    setReservations(INITIAL_RESERVATIONS);
+    setPackages(INITIAL_PACKAGES);
+    setIncidents(INITIAL_INCIDENTS);
+    setAmenities(INITIAL_AMENITY_RESERVATIONS);
+    setApartments(INITIAL_APARTMENT_PROFILES);
+    setGamesTurns(INITIAL_GAMES_TURNS);
+    setGymTurns(INITIAL_GYM_TURNS);
+    try {
+      localStorage.setItem(APARTMENTS_KEY, JSON.stringify(INITIAL_APARTMENT_PROFILES));
+      localStorage.setItem(GAMES_ROOM_KEY, JSON.stringify(INITIAL_GAMES_TURNS));
+      localStorage.setItem(GYM_KEY, JSON.stringify(INITIAL_GYM_TURNS));
+      localStorage.removeItem('controle_camareiras_slots_v1');
+      localStorage.removeItem('controle_camareiras_observacoes_notas_v1');
+    } catch (e) {
+      console.error(e);
+    }
+    setHousekeepingVersion((v) => v + 1);
+    showToast('Dados de demonstração restaurados com sucesso!', 'success');
   };
 
   // Active view inside 'hospedagem' module: 'calendar' | 'occupancy' | 'history'
@@ -207,6 +514,22 @@ export default function App() {
       console.error('Falha ao salvar apartamentos no localStorage:', e);
     }
   }, [apartments]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GAMES_ROOM_KEY, JSON.stringify(gamesTurns));
+    } catch (e) {
+      console.error('Falha ao salvar jogos no localStorage:', e);
+    }
+  }, [gamesTurns]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GYM_KEY, JSON.stringify(gymTurns));
+    } catch (e) {
+      console.error('Falha ao salvar academia no localStorage:', e);
+    }
+  }, [gymTurns]);
 
   // Reservation Handlers
   const handleSaveReservation = (savedRes: Reservation) => {
@@ -374,7 +697,7 @@ export default function App() {
   };
 
   // Calculations for quick KPIs: occupied apartments and overall occupancy rate
-  const totalBuildingAptos = BUILDING_APARTMENTS.length; // 124 apartamentos
+  const totalBuildingAptos = apartments.length || BUILDING_APARTMENTS.length;
   const occupiedApartments = new Set(
     reservations.filter((r) => r.status === 'ativa').map((r) => r.apto.trim())
   );
@@ -387,6 +710,8 @@ export default function App() {
   const pendingPackagesCount = packages.filter((p) => p.status === 'aguardando').length;
   const pendingIncidentsCount = incidents.filter((i) => i.status !== 'resolvida').length;
 
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.username?.toLowerCase() === 'admin';
+
   const moduleTitles: Record<SystemModule, string> = {
     inicio: 'Painel Geral • Tela Inicial',
     hospedagem: 'Controle de Hospedagem & Reservas',
@@ -398,6 +723,11 @@ export default function App() {
     ocorrencias: 'Livro de Ocorrências',
     cadastros: 'Cadastros & Diretório Predial'
   };
+
+  // Authentication Barrier: If user is not logged in, render LoginScreen
+  if (!currentUser) {
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} users={users} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-800 flex flex-col lg:flex-row font-sans antialiased">
@@ -435,6 +765,20 @@ export default function App() {
         pendingPackagesCount={pendingPackagesCount}
         pendingIncidentsCount={pendingIncidentsCount}
         totalBuildingAptos={totalBuildingAptos}
+        onOpenDataManagement={
+          isAdmin
+            ? () => {
+                setIsDataModalOpen(true);
+                setIsMobileSidebarOpen(false);
+              }
+            : undefined
+        }
+        currentUser={currentUser}
+        onOpenUserModal={() => {
+          setIsUserModalOpen(true);
+          setIsMobileSidebarOpen(false);
+        }}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Column */}
@@ -449,6 +793,9 @@ export default function App() {
             totalBuildingAptos={totalBuildingAptos}
             occupancyRate={occupancyRate}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
+            onOpenDataManagement={isAdmin ? () => setIsDataModalOpen(true) : undefined}
+            currentUser={currentUser}
+            onOpenUserModal={() => setIsUserModalOpen(true)}
           />
         ) : (
           <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs">
@@ -468,8 +815,37 @@ export default function App() {
                 </h1>
               </div>
 
-              {/* Quick action button to go directly to Controle de Hospedagem */}
-              <div className="flex items-center gap-3">
+              {/* Top actions */}
+              <div className="flex items-center gap-2.5">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsDataModalOpen(true)}
+                    title="Gerenciar Dados e Limpar Exemplos (Administrador)"
+                    className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl transition-all border border-slate-200 cursor-pointer"
+                  >
+                    <Database className="w-3.5 h-3.5 text-slate-600" />
+                    <span className="hidden sm:inline">Gerenciar Dados</span>
+                  </button>
+                )}
+
+                {/* Operator user avatar pill */}
+                {currentUser && (
+                  <button
+                    type="button"
+                    onClick={() => setIsUserModalOpen(true)}
+                    title={`Operador logado: ${currentUser.nome} (${currentUser.cargo}) - Clique para alterar senha ou perfil`}
+                    className="inline-flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 transition-colors cursor-pointer"
+                  >
+                    <div className="w-5 h-5 rounded-full bg-blue-700 text-white flex items-center justify-center text-[10px] font-bold">
+                      {currentUser.nome ? currentUser.nome.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                    <span className="max-w-[100px] truncate hidden md:inline font-bold">
+                      {currentUser.nome || currentUser.username}
+                    </span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   id="topbar-btn-hospedagem"
@@ -495,6 +871,7 @@ export default function App() {
               incidents={incidents}
               amenities={amenities}
               totalBuildingAptos={totalBuildingAptos}
+              onOpenDataManagement={isAdmin ? () => setIsDataModalOpen(true) : undefined}
             />
           )}
 
@@ -530,14 +907,31 @@ export default function App() {
 
           {activeModule === 'camareiras' && (
             <HousekeepingView
+              key={housekeepingVersion}
               apartments={apartments}
               onOpenApartmentsModal={() => setActiveModule('cadastros')}
             />
           )}
 
-          {activeModule === 'jogos' && <GamesRoomView />}
+          {activeModule === 'jogos' && (
+            <GamesRoomView
+              turns={gamesTurns}
+              onAddTurn={handleAddGameTurn}
+              onUpdateTurn={handleUpdateGameTurn}
+              isAdmin={isAdmin}
+              onClearModule={handleClearGamesRoom}
+            />
+          )}
 
-          {activeModule === 'academia' && <GymView />}
+          {activeModule === 'academia' && (
+            <GymView
+              turns={gymTurns}
+              onAddTurn={handleAddGymTurn}
+              onUpdateTurn={handleUpdateGymTurn}
+              isAdmin={isAdmin}
+              onClearModule={handleClearGym}
+            />
+          )}
 
           {activeModule === 'churrasqueira' && (
             <PartyHallView
@@ -599,6 +993,46 @@ export default function App() {
           onEdit={handleEditReservation}
         />
 
+        {/* Data Management & Clear Mock Modal */}
+        <DataManagementModal
+          isOpen={isDataModalOpen}
+          onClose={() => setIsDataModalOpen(false)}
+          counts={{
+            reservations: reservations.length,
+            packages: packages.length,
+            incidents: incidents.length,
+            amenities: amenities.length,
+            apartments: apartments.length,
+            gamesRoom: gamesTurns.length,
+            gym: gymTurns.length
+          }}
+          onClearReservations={handleClearReservations}
+          onClearPackages={handleClearPackages}
+          onClearIncidents={handleClearIncidents}
+          onClearAmenities={handleClearAmenities}
+          onClearHousekeeping={handleClearHousekeeping}
+          onClearGamesRoom={handleClearGamesRoom}
+          onClearGym={handleClearGym}
+          onClearAllDemoData={handleClearAllDemoData}
+          onRestoreDemoData={handleRestoreDemoData}
+        />
+
+        {/* User Account & Operator Management Modal */}
+        {currentUser && (
+          <UserManagementModal
+            isOpen={isUserModalOpen}
+            onClose={() => setIsUserModalOpen(false)}
+            currentUser={currentUser}
+            users={users}
+            onUpdatePassword={handleUpdatePassword}
+            onCreateUser={handleCreateUser}
+            onUpdateUser={handleUpdateUser}
+            onToggleUserStatus={handleToggleUserStatus}
+            onDeleteUser={handleDeleteUser}
+            onLogout={handleLogout}
+          />
+        )}
+
         {/* Universal Footer */}
         <footer className="bg-white border-t border-slate-200 py-4 mt-auto no-print">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
@@ -610,15 +1044,17 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={handleResetSampleData}
-                className="inline-flex items-center gap-1.5 text-slate-500 hover:text-blue-900 transition-colors cursor-pointer"
-                title="Restaurar dados de exemplo originais de todos os módulos"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Restaurar dados de exemplo</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleResetSampleData}
+                  className="inline-flex items-center gap-1.5 text-slate-500 hover:text-blue-900 transition-colors cursor-pointer"
+                  title="Restaurar dados de exemplo originais de todos os módulos (Administrador)"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Restaurar dados de exemplo</span>
+                </button>
+              )}
               <span className="font-mono text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
                 v2.0
               </span>

@@ -148,7 +148,7 @@ export const ApartmentsRegistryModal: React.FC<ApartmentsRegistryModalProps> = (
                   Lista de Cadastro dos Apartamentos
                 </h2>
                 <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md">
-                  124 Unidades
+                  {apartments.length} Unidades
                 </span>
               </div>
               <p className="text-xs text-slate-500">
@@ -338,14 +338,18 @@ export const ApartmentsRegistryModal: React.FC<ApartmentsRegistryModalProps> = (
 
                       {/* E-mail */}
                       <td className="py-2.5 px-3.5 text-slate-600">
-                        <a
-                          href={`mailto:${item.email}`}
-                          className="hover:text-blue-700 hover:underline flex items-center gap-1 truncate max-w-xs"
-                          title={item.email}
-                        >
-                          <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="truncate">{item.email}</span>
-                        </a>
+                        {item.email ? (
+                          <a
+                            href={`mailto:${item.email}`}
+                            className="hover:text-blue-700 hover:underline flex items-center gap-1 truncate max-w-xs"
+                            title={item.email}
+                          >
+                            <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{item.email}</span>
+                          </a>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">—</span>
+                        )}
                       </td>
 
                       {/* Tipo Apto */}
@@ -464,13 +468,15 @@ export const ApartmentsRegistryModal: React.FC<ApartmentsRegistryModalProps> = (
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">E-mail de Contato</label>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  E-mail de Contato <span className="text-slate-400 font-normal text-[11px]">(Opcional)</span>
+                </label>
                 <input
                   type="email"
                   value={editingApto.email}
+                  placeholder="email@exemplo.com (opcional)"
                   onChange={(e) => setEditingApto({ ...editingApto, email: e.target.value })}
                   className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
-                  required
                 />
               </div>
 
@@ -616,12 +622,11 @@ export const ApartmentsRegistryModal: React.FC<ApartmentsRegistryModalProps> = (
 
                 <div>
                   <label className="font-semibold text-slate-700 block mb-1">
-                    E-mail de Contato *
+                    E-mail de Contato <span className="text-slate-400 font-normal text-[11px]">(Opcional)</span>
                   </label>
                   <input
                     type="email"
-                    required
-                    placeholder="email@exemplo.com"
+                    placeholder="email@exemplo.com (opcional)"
                     value={newAptoData.email}
                     onChange={(e) =>
                       setNewAptoData({ ...newAptoData, email: e.target.value })

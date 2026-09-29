@@ -94,7 +94,11 @@ export const HousekeepingReportModal: React.FC<HousekeepingReportModalProps> = (
   // Apply maid, status and search filters (for the detailed table)
   const filteredSlots = useMemo(() => {
     return periodFilteredSlots.filter((slot) => {
-      if (selectedMaidFilter !== 'todas' && slot.maid !== selectedMaidFilter) {
+      if (
+        selectedMaidFilter !== 'todas' &&
+        slot.maid !== selectedMaidFilter &&
+        !(selectedMaidFilter === 'JOSEILDES' && slot.maid === 'JOSI')
+      ) {
         return false;
       }
 
@@ -120,7 +124,13 @@ export const HousekeepingReportModal: React.FC<HousekeepingReportModalProps> = (
   // Base slots for KPIs (respects maid filter if selected)
   const baseSlotsForKPIs = useMemo(() => {
     return periodFilteredSlots.filter((s) => {
-      if (selectedMaidFilter !== 'todas' && s.maid !== selectedMaidFilter) return false;
+      if (
+        selectedMaidFilter !== 'todas' &&
+        s.maid !== selectedMaidFilter &&
+        !(selectedMaidFilter === 'JOSEILDES' && s.maid === 'JOSI')
+      ) {
+        return false;
+      }
       return true;
     });
   }, [periodFilteredSlots, selectedMaidFilter]);
@@ -1099,7 +1109,7 @@ export const HousekeepingReportModal: React.FC<HousekeepingReportModalProps> = (
                     <option value="todas">Todas as Camareiras</option>
                     <option value="HELENA">Helena</option>
                     <option value="JOSEANE">Joseane</option>
-                    <option value="JOSI">Josi</option>
+                    <option value="JOSEILDES">Joseildes</option>
                   </select>
                 </div>
 

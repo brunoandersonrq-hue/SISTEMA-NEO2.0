@@ -27,7 +27,9 @@ import {
   CopyPlus,
   RefreshCw,
   FileText,
-  BarChart3
+  BarChart3,
+  ArrowRight,
+  AlertTriangle
 } from 'lucide-react';
 import { HousekeepingReportModal } from './HousekeepingReportModal.tsx';
 import {
@@ -113,11 +115,12 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
   const [slots, setSlots] = useState<CleaningSlot[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_SLOTS_KEY);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed.map((s: CleaningSlot) => ({
             ...s,
+            maid: (s.maid === 'JOSI' ? 'JOSEILDES' : s.maid) as MaidName,
             observacao:
               s.observacao?.toUpperCase() === 'ENCAIXE' ||
               (s.status === 'agendado' &&
@@ -136,6 +139,7 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
     }
     return INITIAL_CLEANING_SLOTS.map((s) => ({
       ...s,
+      maid: (s.maid === 'JOSI' ? 'JOSEILDES' : s.maid) as MaidName,
       observacao:
         s.observacao?.toUpperCase() === 'ENCAIXE' ||
         (s.status === 'agendado' &&
@@ -205,6 +209,13 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
   } | null>(null);
   const [copiedText, setCopiedText] = useState(false);
 
+  // Copy Week Data Modal state
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
+  const [sourceWeekOffset, setSourceWeekOffset] = useState<number>(-1);
+  const [copyNotesOption, setCopyNotesOption] = useState<boolean>(true);
+  const [copyOnlyVacantOption, setCopyOnlyVacantOption] = useState<boolean>(false);
+  const [copySuccessToast, setCopySuccessToast] = useState<string | null>(null);
+
   // Simple notes & observations state
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() => {
     try {
@@ -249,11 +260,12 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
 
   // Helper to retrieve slot for a specific day, maid and time
   const getSlotForCell = (day: DayConfig, maidName: MaidName, timeStr: string): CleaningSlot => {
+    const isTargetMaid = (m: string) => m === maidName || (maidName === 'JOSEILDES' && m === 'JOSI');
     const found = slots.find(
       (s) =>
         s.dayDate === day.fullDate &&
         s.timeSlot === timeStr &&
-        s.maid === maidName
+        isTargetMaid(s.maid)
     );
     if (found) return found;
 
@@ -263,7 +275,7 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
         (s) =>
           s.dayKey === day.key &&
           s.timeSlot === timeStr &&
-          s.maid === maidName &&
+          isTargetMaid(s.maid) &&
           (!s.dayDate || s.dayDate === day.fullDate)
       );
       if (legacyFound) return legacyFound;
@@ -280,6 +292,99 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
       status: 'vago' as CleaningStatus,
       observacao: ''
     };
+  };
+
+  // Source week computation for the copy feature
+  const sourceWeekDays = useMemo(() => getWeekDays(sourceWeekOffset), [sourceWeekOffset]);
+  const sourcePeriodText = useMemo(() => getPeriodText(sourceWeekDays), [sourceWeekDays]);
+
+  const sourceWeekSlots = useMemo(() => {
+    return sourceWeekDays.flatMap((day) =>
+      MAIDS.flatMap((maid) => TIME_SLOTS.map((ts) => getSlotForCell(day, maid.name, ts.time)))
+    );
+  }, [sourceWeekDays, slots, sourceWeekOffset]);
+
+  const sourceActiveCleaningsCount = useMemo(() => {
+    return sourceWeekSlots.filter(
+      (s) => s.status !== 'vago' && s.status !== 'ausente' && s.apto !== 'VAGO' && s.apto !== 'AUSENTE'
+    ).length;
+  }, [sourceWeekSlots]);
+
+  const handleOpenCopyModal = () => {
+    // Default source week to previous week relative to the currently viewed week
+    setSourceWeekOffset(weekOffset - 1);
+    setIsCopyModalOpen(true);
+  };
+
+  const handleExecuteCopy = () => {
+    const targetDays = currentWeekDays;
+    const sourceDays = sourceWeekDays;
+
+    const newTargetSlots: CleaningSlot[] = [];
+
+    targetDays.forEach((targetDay, dayIdx) => {
+      const sourceDay = sourceDays[dayIdx];
+      MAIDS.forEach((maid) => {
+        TIME_SLOTS.forEach((ts) => {
+          const sourceSlot = getSlotForCell(sourceDay, maid.name, ts.time);
+          const currentTargetSlot = getSlotForCell(targetDay, maid.name, ts.time);
+
+          if (
+            copyOnlyVacantOption &&
+            currentTargetSlot.status !== 'vago' &&
+            currentTargetSlot.apto !== 'VAGO' &&
+            currentTargetSlot.status !== 'ausente' &&
+            currentTargetSlot.apto !== 'AUSENTE'
+          ) {
+            newTargetSlots.push(currentTargetSlot);
+            return;
+          }
+
+          const targetStatus: CleaningStatus =
+            sourceSlot.status === 'concluido' ? 'agendado' : sourceSlot.status;
+
+          newTargetSlots.push({
+            id: `cs-${targetDay.fullDate}-${maid.name}-${ts.time}`,
+            dayKey: targetDay.key,
+            dayDate: targetDay.fullDate,
+            timeSlot: ts.time,
+            maid: maid.name,
+            apto: sourceSlot.apto,
+            status: targetStatus,
+            observacao: sourceSlot.observacao || ''
+          });
+        });
+      });
+    });
+
+    const targetFullDates = new Set(targetDays.map((d) => d.fullDate));
+    const preservedSlots = slots.filter((s) => !targetFullDates.has(s.dayDate));
+    const finalSlots = [...preservedSlots, ...newTargetSlots];
+    saveSlots(finalSlots);
+
+    if (copyNotesOption) {
+      const sourceWeekKey = sourceDays[0]?.fullDate || 'geral';
+      const targetWeekKey = targetDays[0]?.fullDate || 'geral';
+      const sourceNotes = notesMap[sourceWeekKey];
+      if (sourceNotes) {
+        const updatedNotes = { ...notesMap, [targetWeekKey]: sourceNotes };
+        setNotesMap(updatedNotes);
+        try {
+          localStorage.setItem('controle_camareiras_observacoes_notas_v1', JSON.stringify(updatedNotes));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+
+    setIsCopyModalOpen(false);
+    const copiedCount = newTargetSlots.filter(
+      (s) => s.status !== 'vago' && s.apto !== 'VAGO' && s.status !== 'ausente'
+    ).length;
+    setCopySuccessToast(
+      `Escala copiada com sucesso! ${copiedCount} agendamentos aplicados para ${periodText}.`
+    );
+    setTimeout(() => setCopySuccessToast(null), 4500);
   };
 
   // Upsert slot (updates if exists, otherwise inserts)
@@ -490,9 +595,12 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
     JOSEANE: currentWeekSlots.filter(
       (s) => s.maid === 'JOSEANE' && s.status !== 'vago' && s.status !== 'ausente'
     ).length,
-    JOSI: currentWeekSlots.filter(
-      (s) => s.maid === 'JOSI' && s.status !== 'vago' && s.status !== 'ausente'
-    ).length
+    JOSEILDES: currentWeekSlots.filter(
+      (s) => (s.maid === 'JOSEILDES' || s.maid === 'JOSI') && s.status !== 'vago' && s.status !== 'ausente'
+    ).length,
+    get JOSI() {
+      return this.JOSEILDES;
+    }
   };
 
   const totalEncaixes = currentWeekSlots.filter((s) => s.status === 'encaixe').length;
@@ -507,7 +615,14 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
 
   // Filtered maids
   const displayedMaids =
-    selectedMaidFilter === 'todas' ? MAIDS : MAIDS.filter((m) => m.name === selectedMaidFilter);
+    selectedMaidFilter === 'todas'
+      ? MAIDS
+      : MAIDS.filter(
+          (m) =>
+            m.name === selectedMaidFilter ||
+            (selectedMaidFilter === 'JOSEILDES' && m.name === 'JOSI') ||
+            (selectedMaidFilter === 'JOSI' && m.name === 'JOSEILDES')
+        );
 
   return (
     <div className="space-y-6">
@@ -530,6 +645,16 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
         <div className="flex items-center gap-2 flex-wrap self-start md:self-auto no-print">
           <button
             type="button"
+            onClick={handleOpenCopyModal}
+            className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-3.5 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer"
+            title="Copiar horários e agendamentos da semana anterior para a semana atual"
+          >
+            <CopyPlus className="w-4 h-4 text-slate-950" />
+            <span>Copiar Semana Anterior</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsReportModalOpen(true)}
             className="inline-flex items-center gap-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer"
             title="Abrir Relatórios Gráficos de Produtividade, Status Vago e Moradia/Inquilino/Temporada"
@@ -543,11 +668,28 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
             onClick={() => setWhatsAppMaidModal({ maid: 'HELENA', dayKey: 'segunda' })}
             className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer"
           >
-            <MessageSquare className="w-4 h-4" />
-            <span>Enviar Escala WhatsApp</span>
+            <Copy className="w-4 h-4" />
+            <span>Copiar Escala do Dia</span>
           </button>
         </div>
       </div>
+
+      {/* Copy Success Feedback Toast */}
+      {copySuccessToast && (
+        <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-md flex items-center justify-between gap-3 animate-in fade-in duration-200 no-print">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-200 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold">{copySuccessToast}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCopySuccessToast(null)}
+            className="text-white/80 hover:text-white p-1 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* KPI & Summary Cards */}
       <div className="space-y-2">
@@ -624,13 +766,13 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
           <div
             onClick={() => setIsReportModalOpen(true)}
             className="bg-white p-3.5 rounded-xl border-l-4 border-l-purple-500 border border-slate-200 shadow-2xs cursor-pointer hover:border-blue-400 hover:shadow-xs transition-all"
-            title="Clique para ver no relatório de Josi"
+            title="Clique para ver no relatório de Joseildes"
           >
             <div className="flex items-center justify-between text-purple-900 text-[11px] font-bold">
-              <span>JOSI</span>
+              <span>JOSEILDES</span>
               <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-100">1h/apto</span>
             </div>
-            <div className="text-xl font-black text-slate-900 mt-1">{maidStats.JOSI}</div>
+            <div className="text-xl font-black text-slate-900 mt-1">{maidStats.JOSEILDES}</div>
             <span className="text-[10px] text-slate-500 font-medium">aptos agendados</span>
           </div>
 
@@ -732,6 +874,17 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
                 </span>
               )}
             </div>
+
+            {/* Button to copy data from previous week */}
+            <button
+              type="button"
+              onClick={handleOpenCopyModal}
+              className="inline-flex items-center gap-1.5 bg-slate-950 hover:bg-slate-900 active:scale-95 text-amber-300 hover:text-amber-200 text-xs font-black px-3 py-1.5 rounded-xl shadow-2xs transition-all cursor-pointer border border-amber-500/80"
+              title="Copiar dados e agendamentos da semana anterior para a semana atual"
+            >
+              <CopyPlus className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Copiar Semana Anterior</span>
+            </button>
           </div>
 
           {/* Filter bar */}
@@ -755,9 +908,9 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
               className="bg-white text-xs px-2.5 py-1.5 rounded-lg border border-amber-400 focus:outline-none focus:ring-2 focus:ring-slate-900 font-bold"
             >
               <option value="todas">Todas Camareiras</option>
-              <option value="HELENA">Helena</option>
-              <option value="JOSEANE">Joseane</option>
-              <option value="JOSI">Josi</option>
+              <option value="HELENA">HELENA</option>
+              <option value="JOSEANE">JOSEANE</option>
+              <option value="JOSEILDES">JOSEILDES</option>
             </select>
 
             {/* Filter Day */}
@@ -860,7 +1013,7 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
             </span>
             <span className="flex items-center gap-1 font-bold text-slate-700">
               <span className="w-2.5 h-2.5 rounded bg-purple-100 inline-block border border-purple-300"></span>
-              JOSI
+              JOSEILDES
             </span>
           </div>
         </div>
@@ -1286,11 +1439,11 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                  <MessageSquare className="w-5 h-5" />
+                  <Copy className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-slate-900">
-                    Enviar Escala do Dia via WhatsApp
+                    Copiar Escala do Dia
                   </h3>
                   <p className="text-[11px] text-slate-500">
                     Gera a lista formatada de limpezas da camareira
@@ -1320,9 +1473,9 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
                   }
                   className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 font-bold bg-white"
                 >
-                  <option value="HELENA">HELENA (47) 99812-4011</option>
-                  <option value="JOSEANE">JOSEANE (47) 99744-8822</option>
-                  <option value="JOSI">JOSI (47) 99655-3377</option>
+                  <option value="HELENA">HELENA</option>
+                  <option value="JOSEANE">JOSEANE</option>
+                  <option value="JOSEILDES">JOSEILDES</option>
                 </select>
               </div>
 
@@ -1350,7 +1503,7 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
             {/* Message Preview */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-slate-700">Mensagem que será enviada:</label>
+                <label className="text-xs font-bold text-slate-700">Texto formatado da escala:</label>
                 <button
                   type="button"
                   onClick={() =>
@@ -1394,24 +1547,200 @@ export const HousekeepingView: React.FC<HousekeepingViewProps> = ({
                 Fechar
               </button>
 
-              <a
-                href={`https://wa.me/55${
-                  MAIDS.find((m) => m.name === whatsAppMaidModal.maid)?.phone.replace(/\D/g, '') || ''
-                }?text=${encodeURIComponent(
-                  generateMaidWhatsAppText(
-                    whatsAppMaidModal.maid,
-                    whatsAppMaidModal.dayKey
+              <button
+                type="button"
+                onClick={() =>
+                  handleCopyText(
+                    generateMaidWhatsAppText(
+                      whatsAppMaidModal.maid,
+                      whatsAppMaidModal.dayKey
+                    )
                   )
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setWhatsAppMaidModal(null)}
+                }
                 className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                <MessageSquare className="w-4 h-4" />
-                <span>Abrir WhatsApp da {whatsAppMaidModal.maid}</span>
-                <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-              </a>
+                {copiedText ? (
+                  <>
+                    <Check className="w-4 h-4 text-white" />
+                    <span>Texto Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 text-white" />
+                    <span>Copiar Texto</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Copy Week Data Modal */}
+      {isCopyModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-4 text-slate-950 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-950/20 text-slate-950 flex items-center justify-center shadow-2xs">
+                  <CopyPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight leading-tight">
+                    Copiar Dados da Semana Anterior
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-950/80">
+                    Replicar horários e escala de limpeza das camareiras
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCopyModalOpen(false)}
+                className="p-1.5 text-slate-950/70 hover:text-slate-950 hover:bg-black/10 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 text-xs text-slate-700">
+              {/* Origin -> Destination Banner */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                  {/* Origin */}
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                      Semana de Origem (Copiar de)
+                    </span>
+                    <select
+                      value={sourceWeekOffset}
+                      onChange={(e) => setSourceWeekOffset(Number(e.target.value))}
+                      className="w-full bg-slate-50 font-bold text-slate-900 text-xs px-2 py-1.5 rounded border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {selectableWeeks.map((w) => (
+                        <option key={w.offset} value={w.offset}>
+                          {w.label}
+                        </option>
+                      ))}
+                      {sourceWeekOffset < 0 && (
+                        <option value={sourceWeekOffset}>
+                          Semana Anterior ({sourceWeekDays[0].dateStr} a {sourceWeekDays[5].dateStr})
+                        </option>
+                      )}
+                    </select>
+                    <div className="mt-2 text-[11px] text-slate-500 flex items-center justify-between">
+                      <span>Agendamentos encontrados:</span>
+                      <strong className="text-slate-900 font-mono text-xs">{sourceActiveCleaningsCount}</strong>
+                    </div>
+                  </div>
+
+                  {/* Destination */}
+                  <div className="bg-amber-50/70 p-3 rounded-lg border border-amber-300 shadow-2xs">
+                    <span className="text-[10px] uppercase font-bold text-amber-800 block mb-1">
+                      Semana de Destino (Semana Atual)
+                    </span>
+                    <p className="font-black text-slate-900 text-xs leading-snug">
+                      {periodText}
+                    </p>
+                    <div className="mt-2 text-[11px] text-amber-900 flex items-center justify-between">
+                      <span>Status atual:</span>
+                      <span className="font-semibold text-slate-700">{activeCleaningCount} agendados</span>
+                    </div>
+                  </div>
+                </div>
+
+                {sourceActiveCleaningsCount === 0 && (
+                  <div className="bg-amber-100/70 border border-amber-300 rounded-lg p-2.5 text-amber-900 text-[11px] flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <div>
+                      <span>A semana selecionada ({sourcePeriodText}) não possui agendamentos cadastrados. Deseja utilizar a <strong>Semana Base Original (21 a 26/Set)</strong> como origem?</span>
+                      <button
+                        type="button"
+                        onClick={() => setSourceWeekOffset(0)}
+                        className="mt-1 block text-blue-700 font-bold hover:underline cursor-pointer"
+                      >
+                        &rarr; Selecionar Semana Base (21 a 26/Set) como origem
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Options */}
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold text-slate-900 block">
+                  Opções de Cópia:
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-slate-50 border border-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={copyNotesOption}
+                    onChange={(e) => setCopyNotesOption(e.target.checked)}
+                    className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800 block text-xs">
+                      Copiar também Anotações e Observações da semana
+                    </span>
+                    <span className="text-[11px] text-slate-500 block">
+                      Replica o texto do painel de notas da semana de origem para a semana de destino.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-slate-50 border border-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={copyOnlyVacantOption}
+                    onChange={(e) => setCopyOnlyVacantOption(e.target.checked)}
+                    className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800 block text-xs">
+                      Preservar agendamentos já existentes na semana de destino
+                    </span>
+                    <span className="text-[11px] text-slate-500 block">
+                      Se marcado, apenas os horários vagos serão preenchidos. Se desmarcado, toda a grade da semana será atualizada.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Help Notice */}
+              <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 text-[11px] text-blue-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>Como funciona a cópia da escala:</span>
+                </div>
+                <ul className="list-disc pl-5 space-y-0.5 text-slate-600">
+                  <li>Todos os horários das camareiras (Helena, Joseane, Joseildes) de Segunda a Sábado serão transferidos.</li>
+                  <li>Limpezas que estavam com status "Concluído" voltam para "Agendado" para serem executadas nesta semana.</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCopyModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExecuteCopy}
+                disabled={sourceActiveCleaningsCount === 0}
+                className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black text-xs px-4 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Confirmar e Copiar Escala ({sourceActiveCleaningsCount} aptos)</span>
+              </button>
             </div>
           </div>
         </div>

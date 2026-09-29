@@ -12,9 +12,12 @@ import {
   X,
   Building2,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Database,
+  User,
+  LogOut
 } from 'lucide-react';
-import { SystemModule } from '../types.ts';
+import { SystemModule, UserAccount } from '../types.ts';
 
 interface SidebarProps {
   activeModule: SystemModule;
@@ -25,6 +28,10 @@ interface SidebarProps {
   pendingPackagesCount: number;
   pendingIncidentsCount: number;
   totalBuildingAptos?: number;
+  onOpenDataManagement?: () => void;
+  currentUser?: UserAccount;
+  onOpenUserModal?: () => void;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -35,7 +42,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeGuestsCount,
   pendingPackagesCount,
   pendingIncidentsCount,
-  totalBuildingAptos = 124
+  totalBuildingAptos = 124,
+  onOpenDataManagement,
+  currentUser,
+  onOpenUserModal,
+  onLogout
 }) => {
   const menuItems: {
     id: SystemModule;
@@ -60,9 +71,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'camareiras',
       label: 'Controle de Camareiras',
-      description: 'Escala Semanal & 3 Camareiras',
-      icon: Sparkles,
-      badge: { text: '3 Camareiras', color: 'bg-amber-400 text-slate-900 font-bold' }
+      description: 'Escala Semanal de Limpeza',
+      icon: Sparkles
     },
     {
       id: 'jogos',
@@ -228,6 +238,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
           </nav>
         </div>
+
+        {/* User / Operator session bar */}
+        {currentUser && (
+          <div className="p-3 border-t border-slate-800 bg-slate-950/80">
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={onOpenUserModal}
+                className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-80 transition-opacity cursor-pointer flex-1"
+                title="Configurações de Conta e Senha"
+              >
+                <div className="w-8 h-8 rounded-xl bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-300 font-bold text-xs shrink-0">
+                  {currentUser.nome ? currentUser.nome.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-200 truncate leading-tight">
+                    {currentUser.nome || currentUser.username}
+                  </p>
+                  <p className="text-[10px] text-slate-400 truncate leading-tight mt-0.5">
+                    {currentUser.cargo}
+                  </p>
+                </div>
+              </button>
+
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  title="Sair do sistema (Logout)"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-900 border border-transparent hover:border-slate-800 transition-colors cursor-pointer shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Bottom Data Management Bar */}
+        {onOpenDataManagement && (
+          <div className="p-3 border-t border-slate-800/80 bg-slate-950/60">
+            <button
+              type="button"
+              onClick={onOpenDataManagement}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-blue-400" />
+                <span className="font-semibold">Gerenciar Dados</span>
+              </div>
+              <span className="text-[10px] font-bold bg-slate-800 text-blue-300 border border-slate-700 px-1.5 py-0.5 rounded">
+                Limpar Exemplos
+              </span>
+            </button>
+          </div>
+        )}
       </aside>
     </>
   );

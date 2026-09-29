@@ -1,4 +1,4 @@
-import { PackageDelivery, IncidentRecord, AmenityReservation } from '../types.ts';
+import { PackageDelivery, IncidentRecord, AmenityReservation, GameTurn, GymKeyTurn } from '../types.ts';
 
 export const INITIAL_PACKAGES: PackageDelivery[] = [
   {
@@ -113,3 +113,64 @@ export const INITIAL_AMENITY_RESERVATIONS: AmenityReservation[] = [
     status: 'confirmada'
   }
 ];
+
+export const INITIAL_GAMES_TURNS: GameTurn[] = [
+  {
+    id: '1',
+    apto: '402',
+    responsavel: 'Lucas Prado',
+    mesa: 'kit bolas + 04 tacos',
+    horario: '2026-09-22',
+    status: 'em_uso'
+  },
+  {
+    id: '2',
+    apto: '215',
+    responsavel: 'Camila Rocha',
+    mesa: 'Dominó',
+    horario: '2026-09-22',
+    status: 'em_uso'
+  },
+  {
+    id: '3',
+    apto: '601',
+    responsavel: 'Marcos Vinicius',
+    mesa: 'Xadrez',
+    horario: '2026-09-22',
+    status: 'devolvido',
+    dataDevolucao: '2026-09-22 11:10',
+    observacaoDevolucao: 'Todas as peças conferidas e completas.',
+    teveNaoConformidade: false
+  }
+];
+
+export const INITIAL_GYM_TURNS: GymKeyTurn[] = [
+  {
+    id: 'g-1',
+    apto: '502',
+    responsavel: 'Rafael Santos',
+    item: 'Chave Principal da Academia',
+    horario: '2026-09-22',
+    status: 'em_uso'
+  },
+  {
+    id: 'g-2',
+    apto: '304',
+    responsavel: 'Juliana Mendes',
+    item: 'Chave Principal da Academia',
+    horario: '2026-09-22',
+    status: 'em_uso'
+  },
+  {
+    id: 'g-3',
+    apto: '108',
+    responsavel: 'Thiago Oliveira',
+    item: 'Cartão de Acesso / Tag',
+    horario: '2026-09-22',
+    status: 'devolvido',
+    dataDevolucao: '2026-09-22 às 09:40',
+    observacaoDevolucao: 'Chave e chaveiro devolvidos intactos na recepção.',
+    teveNaoConformidade: false
+  }
+];
+

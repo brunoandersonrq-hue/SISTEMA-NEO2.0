@@ -9,7 +9,8 @@ import {
   BookOpen,
   Users,
   ArrowRight,
-  Percent
+  Percent,
+  Database
 } from 'lucide-react';
 import { SystemModule, Reservation, PackageDelivery, IncidentRecord, AmenityReservation } from '../types.ts';
 
@@ -20,6 +21,7 @@ interface HomeDashboardProps {
   incidents: IncidentRecord[];
   amenities: AmenityReservation[];
   totalBuildingAptos: number;
+  onOpenDataManagement?: () => void;
 }
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({
@@ -28,7 +30,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   packages,
   incidents,
   amenities,
-  totalBuildingAptos
+  totalBuildingAptos,
+  onOpenDataManagement
 }) => {
   // Calculations
   const activeReservations = reservations.filter((r) => r.status === 'ativa');
@@ -56,10 +59,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     {
       id: 'camareiras' as SystemModule,
       title: 'Controle de Camareiras',
-      description: 'Escala semanal de limpeza dos apartamentos com Helena, Joseane e Josi. 1 hora por apartamento, encaixes e registro de recusas.',
+      description: 'Escala semanal de limpeza dos apartamentos com Helena, Joseane e Joseildes. 1 hora por apartamento, encaixes e registro de recusas.',
       icon: Sparkles,
-      badge: '3 Camareiras • 1h/apto',
-      badgeColor: 'bg-amber-100 text-amber-900 border-amber-300 font-bold',
       actionText: 'Acessar Escala de Limpeza'
     },
     {
@@ -218,9 +219,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                     </div>
                   </div>
 
-                  <span className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${mod.badgeColor}`}>
-                    {mod.badge}
-                  </span>
+                  {mod.badge && (
+                    <span className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${mod.badgeColor || ''}`}>
+                      {mod.badge}
+                    </span>
+                  )}
 
                   <p className="text-xs text-slate-600 leading-relaxed">
                     {mod.description}
@@ -236,6 +239,33 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           })}
         </div>
       </div>
+
+      {/* Data Management Footer Card */}
+      {onOpenDataManagement && (
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                Gerenciamento de Dados & Testes
+              </h4>
+              <p className="text-xs text-slate-500">
+                Pronto para usar o condomínio com dados reais? Você pode limpar os dados de teste a qualquer momento.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenDataManagement}
+            className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors self-start sm:self-auto cursor-pointer shadow-xs"
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Gerenciar / Limpar Dados</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

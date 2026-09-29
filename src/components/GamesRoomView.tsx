@@ -1,49 +1,26 @@
 import React, { useState, useMemo } from 'react';
-import { Gamepad2, Clock, ShieldAlert, CheckCircle2, AlertCircle, RotateCcw, PackageCheck, Search, X, CheckCheck, AlertTriangle, Calendar } from 'lucide-react';
+import { Gamepad2, Clock, ShieldAlert, CheckCircle2, AlertCircle, RotateCcw, PackageCheck, Search, X, CheckCheck, AlertTriangle, Calendar, Trash2 } from 'lucide-react';
 import { getBrasiliaCurrentDateTime } from '../utils/formatters.ts';
+import { GameTurn } from '../types.ts';
+import { INITIAL_GAMES_TURNS } from '../data/condoMockData.ts';
 
-interface GameTurn {
-  id: string;
-  apto: string;
-  responsavel: string;
-  mesa: 'kit bolas + 04 tacos' | 'Ludo' | 'Dominó' | 'Xadrez' | 'Dama' | string;
-  horario: string;
-  status: 'em_uso' | 'devolvido';
-  observacaoDevolucao?: string;
-  dataDevolucao?: string;
-  teveNaoConformidade?: boolean;
+export interface GamesRoomViewProps {
+  turns?: GameTurn[];
+  onAddTurn?: (turn: GameTurn) => void;
+  onUpdateTurn?: (turn: GameTurn) => void;
+  isAdmin?: boolean;
+  onClearModule?: () => void;
 }
 
-export const GamesRoomView: React.FC = () => {
-  const [turns, setTurns] = useState<GameTurn[]>([
-    {
-      id: '1',
-      apto: '402',
-      responsavel: 'Lucas Prado',
-      mesa: 'kit bolas + 04 tacos',
-      horario: '2026-09-22',
-      status: 'em_uso'
-    },
-    {
-      id: '2',
-      apto: '215',
-      responsavel: 'Camila Rocha',
-      mesa: 'Dominó',
-      horario: '2026-09-22',
-      status: 'em_uso'
-    },
-    {
-      id: '3',
-      apto: '601',
-      responsavel: 'Marcos Vinicius',
-      mesa: 'Xadrez',
-      horario: '2026-09-22',
-      status: 'devolvido',
-      dataDevolucao: '2026-09-22 11:10',
-      observacaoDevolucao: 'Todas as peças conferidas e completas.',
-      teveNaoConformidade: false
-    }
-  ]);
+export const GamesRoomView: React.FC<GamesRoomViewProps> = ({
+  turns: propTurns,
+  onAddTurn,
+  onUpdateTurn,
+  isAdmin,
+  onClearModule
+}) => {
+  const [localTurns, setLocalTurns] = useState<GameTurn[]>(INITIAL_GAMES_TURNS);
+  const turns = propTurns ?? localTurns;
 
   const [newTurn, setNewTurn] = useState({
     apto: '',
@@ -90,17 +67,19 @@ export const GamesRoomView: React.FC = () => {
   const handleAddTurn = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTurn.apto || !newTurn.responsavel) return;
-    setTurns([
-      ...turns,
-      {
-        id: `turn-${Date.now()}`,
-        apto: newTurn.apto,
-        responsavel: newTurn.responsavel,
-        mesa: newTurn.mesa,
-        horario: newTurn.horario,
-        status: 'em_uso'
-      }
-    ]);
+    const newEntry: GameTurn = {
+      id: `turn-${Date.now()}`,
+      apto: newTurn.apto,
+      responsavel: newTurn.responsavel,
+      mesa: newTurn.mesa,
+      horario: newTurn.horario,
+      status: 'em_uso'
+    };
+    if (onAddTurn) {
+      onAddTurn(newEntry);
+    } else {
+      setLocalTurns((prev) => [...prev, newEntry]);
+    }
     setNewTurn({ apto: '', responsavel: '', mesa: 'kit bolas + 04 tacos', horario: '2026-09-22' });
     setShowAddForm(false);
   };
@@ -124,18 +103,19 @@ export const GamesRoomView: React.FC = () => {
       formattedDataDevolucao = `${todayFormatted} às ${nowFormatted}`;
     }
 
-    setTurns(turns.map(t => {
-      if (t.id === selectedTurnForReturn.id) {
-        return {
-          ...t,
-          status: 'devolvido',
-          dataDevolucao: formattedDataDevolucao,
-          observacaoDevolucao: returnObs.trim() || (hasNonConformity ? 'Não conformidade informada sem detalhes adicionais.' : 'Item devolvido sem ressalvas.'),
-          teveNaoConformidade: hasNonConformity
-        };
-      }
-      return t;
-    }));
+    const updatedTurn: GameTurn = {
+      ...selectedTurnForReturn,
+      status: 'devolvido',
+      dataDevolucao: formattedDataDevolucao,
+      observacaoDevolucao: returnObs.trim() || (hasNonConformity ? 'Não conformidade informada sem detalhes adicionais.' : 'Item devolvido sem ressalvas.'),
+      teveNaoConformidade: hasNonConformity
+    };
+
+    if (onUpdateTurn) {
+      onUpdateTurn(updatedTurn);
+    } else {
+      setLocalTurns((prev) => prev.map((t) => (t.id === updatedTurn.id ? updatedTurn : t)));
+    }
 
     setSelectedTurnForReturn(null);
     setReturnObs('');
@@ -158,14 +138,32 @@ export const GamesRoomView: React.FC = () => {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="inline-flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors self-start sm:self-auto cursor-pointer"
-        >
-          <PackageCheck className="w-4 h-4" />
-          <span>{showAddForm ? 'Fechar Formulário' : 'RETIRADA DE ITENS'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {isAdmin && onClearModule && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Atenção Administrador: Deseja limpar todos os registros e histórico da Sala de Jogos?')) {
+                  onClearModule();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-colors cursor-pointer"
+              title="Limpar todos os registros deste módulo (Função Administrador)"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span>Limpar Módulo</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="inline-flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors cursor-pointer shadow-xs"
+          >
+            <PackageCheck className="w-4 h-4" />
+            <span>{showAddForm ? 'Fechar Formulário' : 'RETIRADA DE ITENS'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Booking Form */}

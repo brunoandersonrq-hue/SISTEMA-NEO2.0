@@ -57,7 +57,7 @@ export type SystemModule =
   | 'ocorrencias'
   | 'cadastros';
 
-export type MaidName = 'HELENA' | 'JOSEANE' | 'JOSI';
+export type MaidName = 'HELENA' | 'JOSEANE' | 'JOSEILDES' | 'JOSI';
 
 export type CleaningStatus = 'agendado' | 'encaixe' | 'vago' | 'ausente' | 'concluido' | 'checkout' | 'nao_aceitou' | 'nao_atendeu';
 
@@ -133,6 +133,45 @@ export interface ApartmentProfile {
   tipoApto: ApartmentType;
   observacoes?: string;
   updatedAt?: string;
+}
+
+export type UserRole = 'admin' | 'portaria' | 'governanca';
+export type UserStatus = 'ativo' | 'inativo';
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  nome: string;
+  cargo: string;
+  role: UserRole;
+  status?: UserStatus; // 'ativo' (default) ou 'inativo'
+  senhaHash: string; // senha armazenada
+  criadoEm?: string;
+  ultimoAcesso?: string;
+}
+
+export interface GameTurn {
+  id: string;
+  apto: string;
+  responsavel: string;
+  mesa: 'kit bolas + 04 tacos' | 'Ludo' | 'Dominó' | 'Xadrez' | 'Dama' | string;
+  horario: string;
+  status: 'em_uso' | 'devolvido';
+  observacaoDevolucao?: string;
+  dataDevolucao?: string;
+  teveNaoConformidade?: boolean;
+}
+
+export interface GymKeyTurn {
+  id: string;
+  apto: string;
+  responsavel: string;
+  item: 'Chave Principal da Academia' | 'Cartão de Acesso / Tag' | 'Chave Armário / Vestiário' | string;
+  horario: string;
+  status: 'em_uso' | 'devolvido';
+  observacaoDevolucao?: string;
+  dataDevolucao?: string;
+  teveNaoConformidade?: boolean;
 }
 
 
