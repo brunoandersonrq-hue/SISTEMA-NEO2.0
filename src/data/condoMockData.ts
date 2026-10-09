@@ -111,6 +111,16 @@ export const INITIAL_AMENITY_RESERVATIONS: AmenityReservation[] = [
     periodo: 'dia_todo',
     convidadosPrevistos: 18,
     status: 'confirmada'
+  },
+  {
+    id: 'amen-4',
+    espaco: 'cyber_cafe',
+    apto: '412',
+    responsavel: 'Beatriz Lima',
+    data: '2026-10-05',
+    periodo: 'almoco',
+    convidadosPrevistos: 4,
+    status: 'confirmada'
   }
 ];
 

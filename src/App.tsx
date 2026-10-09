@@ -17,6 +17,8 @@ import { HousekeepingView } from './components/HousekeepingView.tsx';
 import { DataManagementModal } from './components/DataManagementModal.tsx';
 import { LoginScreen } from './components/LoginScreen.tsx';
 import { UserManagementModal } from './components/UserManagementModal.tsx';
+import { KeyControlView } from './components/KeyControlView.tsx';
+import { WhatsAppImportModal } from './components/WhatsAppImportModal.tsx';
 
 import {
   Reservation,
@@ -29,10 +31,12 @@ import {
   ApartmentProfile,
   UserAccount,
   GameTurn,
-  GymKeyTurn
+  GymKeyTurn,
+  KeyControlRecord
 } from './types.ts';
 import { INITIAL_RESERVATIONS, BUILDING_APARTMENTS } from './data/mockReservations.ts';
-import { INITIAL_APARTMENT_PROFILES } from './data/apartmentProfiles.ts';
+import { INITIAL_APARTMENT_PROFILES, OFFICIAL_APARTMENTS_MAP } from './data/apartmentProfiles.ts';
+import { INITIAL_KEY_RECORDS } from './data/mockKeyControl.ts';
 import {
   INITIAL_PACKAGES,
   INITIAL_INCIDENTS,
@@ -56,9 +60,10 @@ const STORAGE_KEY = 'controle_reservas_hospedes_v1';
 const PACKAGES_KEY = 'controle_encomendas_v1';
 const INCIDENTS_KEY = 'controle_ocorrencias_v1';
 const AMENITIES_KEY = 'controle_amenities_v1';
-const APARTMENTS_KEY = 'controle_apartamentos_cadastros_v1';
+const APARTMENTS_KEY = 'controle_apartamentos_cadastros_v4';
 const GAMES_ROOM_KEY = 'controle_sala_jogos_v1';
 const GYM_KEY = 'controle_sala_academia_v1';
+const KEY_CONTROL_KEY = 'controle_chaves_portaria_v1';
 const USERS_KEY = 'controle_usuarios_operadores_v1';
 const CURRENT_USER_KEY = 'controle_usuario_logado_v1';
 
@@ -259,30 +264,92 @@ export default function App() {
     return INITIAL_AMENITY_RESERVATIONS;
   });
 
-  // Apartments Profiles State (125 units registry)
+  // Helper to ensure all 124 units + Condomínio exist with official data
+  const buildMergedApartmentProfiles = (existing?: ApartmentProfile[]): ApartmentProfile[] => {
+    const existingMap = new Map<string, ApartmentProfile>();
+    if (Array.isArray(existing)) {
+      existing.forEach((item) => {
+        if (item && item.apto) {
+          existingMap.set(item.apto.trim().toLowerCase(), item);
+        }
+      });
+    }
+
+    const profiles: ApartmentProfile[] = BUILDING_APARTMENTS.map((apto) => {
+      const key = apto.toLowerCase();
+      const stored = existingMap.get(key);
+      const official = OFFICIAL_APARTMENTS_MAP[apto];
+
+      if (official) {
+        // If stored has a customized non-dummy name and phone, preserve it; otherwise apply official data
+        const isDummy = !stored?.proprietario || stored.proprietario.startsWith('Morador Apto') || stored.proprietario.includes('Carlos Eduardo Silva');
+        if (stored && !isDummy && stored.celular) {
+          return {
+            ...stored,
+            apto,
+            tipoApto: stored.tipoApto || official.tipoApto
+          };
+        }
+        return {
+          apto,
+          proprietario: official.proprietario,
+          celular: official.celular,
+          email: official.email,
+          tipoApto: official.tipoApto,
+          observacoes: official.observacoes || 'Cadastro oficial verificado'
+        };
+      }
+
+      if (stored) {
+        return stored;
+      }
+
+      const num = parseInt(apto, 10);
+      const isCobertura = num >= 801;
+
+      return {
+        apto,
+        proprietario: isCobertura ? `Morador Cobertura ${apto}` : `Morador Apto ${apto}`,
+        celular: '',
+        email: '',
+        tipoApto: 'morador' as const,
+        observacoes: 'Aguardando complemento cadastral'
+      };
+    });
+
+    const condoStored = existingMap.get('condomínio') || existingMap.get('condominio');
+    profiles.push(
+      condoStored || {
+        apto: 'Condomínio',
+        proprietario: 'Administração Predial / Síndico',
+        celular: '(82) 98000-0000',
+        email: 'administracao@condominio.com.br',
+        tipoApto: 'morador' as const,
+        observacoes: 'Unidade administrativa, zeladoria e áreas comuns do condomínio'
+      }
+    );
+
+    return profiles;
+  };
+
+  // Apartments Profiles State (125 units registry: 124 apartments + Condomínio)
   const [apartments, setApartments] = useState<ApartmentProfile[]>(() => {
     try {
       const saved = localStorage.getItem(APARTMENTS_KEY);
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const hasCondo = parsed.some(
-            (a) => a.apto.toLowerCase() === 'condomínio' || a.apto.toLowerCase() === 'condominio'
-          );
-          if (!hasCondo && parsed.length === 124) {
-            return [
-              ...parsed,
-              {
-                apto: 'Condomínio',
-                proprietario: 'Administração Predial / Síndico',
-                celular: '(11) 98000-0000',
-                email: 'administracao@condominio.com.br',
-                tipoApto: 'morador' as const,
-                observacoes: 'Unidade administrativa, zeladoria e áreas comuns do condomínio'
-              }
-            ];
-          }
-          return parsed;
+          return buildMergedApartmentProfiles(parsed);
+        }
+      }
+      // Check legacy keys to migrate user data while ensuring official records
+      const legacy = localStorage.getItem('controle_apartamentos_cadastros_v2') || localStorage.getItem('controle_apartamentos_cadastros_v1');
+      if (legacy) {
+        const parsedLegacy = JSON.parse(legacy);
+        if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
+          const merged = buildMergedApartmentProfiles(parsedLegacy);
+          localStorage.setItem(APARTMENTS_KEY, JSON.stringify(merged));
+          return merged;
         }
       }
     } catch (e) {
@@ -309,6 +376,17 @@ export default function App() {
       return [newApto, ...prev];
     });
     showToast(`Apartamento ${newApto.apto} cadastrado com sucesso!`, 'success');
+  };
+
+  const handleSyncOfficialApartments = () => {
+    const fresh = buildMergedApartmentProfiles();
+    setApartments(fresh);
+    try {
+      localStorage.setItem(APARTMENTS_KEY, JSON.stringify(fresh));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast('Cadastros sincronizados com a base oficial do condomínio (124 apartamentos + administração)!', 'success');
   };
 
   // Games Room Turns State
@@ -359,6 +437,51 @@ export default function App() {
   const handleUpdateGymTurn = (updated: GymKeyTurn) => {
     setGymTurns((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     showToast('Devolução confirmada na Sala Academia!', 'success');
+  };
+
+  // Key Control State & Handlers
+  const [keyRecords, setKeyRecords] = useState<KeyControlRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(KEY_CONTROL_KEY);
+      if (saved !== null) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar controle de chaves:', e);
+    }
+    return INITIAL_KEY_RECORDS;
+  });
+
+  const handleAddKeyRecord = (record: Omit<KeyControlRecord, 'id' | 'criadoEm'>) => {
+    const newRecord: KeyControlRecord = {
+      ...record,
+      id: `key_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      criadoEm: new Date().toISOString()
+    };
+    setKeyRecords((prev) => [newRecord, ...prev]);
+    showToast(`Retirada da chave do apto/local ${newRecord.apto} registrada com sucesso!`, 'success');
+  };
+
+  const handleUpdateKeyRecord = (id: string, updates: Partial<KeyControlRecord>) => {
+    const existing = keyRecords.find((k) => k.id === id);
+    if (existing?.devolucao && !isAdmin) {
+      showToast('Apenas o Administrador pode editar registros com devolução concluída.', 'error');
+      return;
+    }
+    setKeyRecords((prev) =>
+      prev.map((k) => (k.id === id ? { ...k, ...updates, atualizadoEm: new Date().toISOString() } : k))
+    );
+    showToast('Registro de controle de chave atualizado!', 'success');
+  };
+
+  const handleDeleteKeyRecord = (id: string) => {
+    if (!isAdmin) {
+      showToast('Apenas o usuário Administrador pode excluir registros de controle de chaves.', 'error');
+      return;
+    }
+    setKeyRecords((prev) => prev.filter((k) => k.id !== id));
+    showToast('Registro de chave removido.', 'info');
   };
 
   // Data management cleanup handlers
@@ -420,11 +543,13 @@ export default function App() {
     setAmenities([]);
     setGamesTurns([]);
     setGymTurns([]);
+    setKeyRecords([]);
     try {
       localStorage.setItem('controle_camareiras_slots_v1', JSON.stringify([]));
       localStorage.removeItem('controle_camareiras_observacoes_notas_v1');
       localStorage.setItem(GAMES_ROOM_KEY, JSON.stringify([]));
       localStorage.setItem(GYM_KEY, JSON.stringify([]));
+      localStorage.setItem(KEY_CONTROL_KEY, JSON.stringify([]));
     } catch (e) {
       console.error(e);
     }
@@ -440,10 +565,12 @@ export default function App() {
     setApartments(INITIAL_APARTMENT_PROFILES);
     setGamesTurns(INITIAL_GAMES_TURNS);
     setGymTurns(INITIAL_GYM_TURNS);
+    setKeyRecords(INITIAL_KEY_RECORDS);
     try {
       localStorage.setItem(APARTMENTS_KEY, JSON.stringify(INITIAL_APARTMENT_PROFILES));
       localStorage.setItem(GAMES_ROOM_KEY, JSON.stringify(INITIAL_GAMES_TURNS));
       localStorage.setItem(GYM_KEY, JSON.stringify(INITIAL_GYM_TURNS));
+      localStorage.setItem(KEY_CONTROL_KEY, JSON.stringify(INITIAL_KEY_RECORDS));
       localStorage.removeItem('controle_camareiras_slots_v1');
       localStorage.removeItem('controle_camareiras_observacoes_notas_v1');
     } catch (e) {
@@ -463,6 +590,40 @@ export default function App() {
 
   const [isVoucherOpen, setIsVoucherOpen] = useState(false);
   const [voucherReservation, setVoucherReservation] = useState<Reservation | null>(null);
+  const [isWhatsAppDirectModalOpen, setIsWhatsAppDirectModalOpen] = useState(false);
+
+  const handleApplyWhatsAppDirect = (parsedData: Partial<Reservation>) => {
+    setEditingReservation({
+      id: `res-${Date.now()}`,
+      apto: parsedData.apto || '',
+      entrada: parsedData.entrada || '',
+      saida: parsedData.saida || '',
+      nomeResponsavel: parsedData.nomeResponsavel || '',
+      email: parsedData.email || '',
+      cpf: parsedData.cpf || '',
+      telefone: parsedData.telefone || '',
+      endereco: parsedData.endereco || '',
+      cep: parsedData.cep || '',
+      cidade: parsedData.cidade || '',
+      estado: parsedData.estado || 'SP',
+      pais: parsedData.pais || 'Brasil',
+      acompanhantes: parsedData.acompanhantes || '',
+      modeloCarro1: parsedData.modeloCarro1 || '',
+      placaCarro1: parsedData.placaCarro1 || '',
+      corCarro1: parsedData.corCarro1 || '',
+      modeloCarro2: parsedData.modeloCarro2 || '',
+      placaCarro2: parsedData.placaCarro2 || '',
+      corCarro2: parsedData.corCarro2 || '',
+      recepcionista: currentUser?.nome || 'Recepção',
+      locador: 'Locação Direta',
+      status: 'confirmada',
+      observacoes: parsedData.observacoes || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    setIsModalOpen(true);
+    showToast('Ficha de hóspede reconhecida com sucesso do WhatsApp!', 'success');
+  };
 
   // Toast feedback state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
@@ -530,6 +691,14 @@ export default function App() {
       console.error('Falha ao salvar academia no localStorage:', e);
     }
   }, [gymTurns]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY_CONTROL_KEY, JSON.stringify(keyRecords));
+    } catch (e) {
+      console.error('Falha ao salvar controle de chaves no localStorage:', e);
+    }
+  }, [keyRecords]);
 
   // Reservation Handlers
   const handleSaveReservation = (savedRes: Reservation) => {
@@ -615,13 +784,19 @@ export default function App() {
     showToast(`Encomenda do apto ${pkg.apto} registrada com sucesso!`, 'success');
   };
 
-  const handleDeliverPackage = (id: string, retiradoPor: string, dataRetirada?: string) => {
+  const handleDeliverPackage = (id: string, retiradoPor: string, dataRetirada?: string, assinatura?: string) => {
     const dateStr = dataRetirada || getBrasiliaCurrentDateTime();
 
     setPackages((prev) =>
       prev.map((p) =>
         p.id === id
-          ? { ...p, status: 'retirado', retiradoPor, dataRetirada: dateStr }
+          ? {
+              ...p,
+              status: 'retirado',
+              retiradoPor,
+              dataRetirada: dateStr,
+              ...(assinatura ? { assinatura } : {})
+            }
           : p
       )
     );
@@ -709,6 +884,7 @@ export default function App() {
 
   const pendingPackagesCount = packages.filter((p) => p.status === 'aguardando').length;
   const pendingIncidentsCount = incidents.filter((i) => i.status !== 'resolvida').length;
+  const pendingKeysCount = keyRecords.filter((k) => !k.devolucao).length;
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.username?.toLowerCase() === 'admin';
 
@@ -718,8 +894,9 @@ export default function App() {
     camareiras: 'Controle de Camareiras • Escala Semanal',
     jogos: 'Sala de Jogos',
     academia: 'Sala Academia',
-    churrasqueira: 'Reserva Salão & Churrasqueira',
+    churrasqueira: 'Reserva de Espaços Comuns (Salão, Cyber Café & Churrasqueiras)',
     encomendas: 'Controle de Encomendas',
+    chaves: 'Controle de Chaves • Portaria & Recepção',
     ocorrencias: 'Livro de Ocorrências',
     cadastros: 'Cadastros & Diretório Predial'
   };
@@ -764,6 +941,7 @@ export default function App() {
         activeGuestsCount={occupiedCount}
         pendingPackagesCount={pendingPackagesCount}
         pendingIncidentsCount={pendingIncidentsCount}
+        pendingKeysCount={pendingKeysCount}
         totalBuildingAptos={totalBuildingAptos}
         onOpenDataManagement={
           isAdmin
@@ -789,6 +967,7 @@ export default function App() {
             currentView={currentView}
             onViewChange={setCurrentView}
             onNewReservation={handleNewReservation}
+            onImportWhatsApp={() => setIsWhatsAppDirectModalOpen(true)}
             occupiedCount={occupiedCount}
             totalBuildingAptos={totalBuildingAptos}
             occupancyRate={occupancyRate}
@@ -870,6 +1049,7 @@ export default function App() {
               packages={packages}
               incidents={incidents}
               amenities={amenities}
+              keyRecords={keyRecords}
               totalBuildingAptos={totalBuildingAptos}
               onOpenDataManagement={isAdmin ? () => setIsDataModalOpen(true) : undefined}
             />
@@ -953,6 +1133,19 @@ export default function App() {
             />
           )}
 
+          {activeModule === 'chaves' && (
+            <KeyControlView
+              keyRecords={keyRecords}
+              onAddKeyRecord={handleAddKeyRecord}
+              onUpdateKeyRecord={handleUpdateKeyRecord}
+              onDeleteKeyRecord={handleDeleteKeyRecord}
+              apartments={apartments}
+              currentUserName={currentUser?.nome || currentUser?.username}
+              isAdmin={isAdmin}
+              currentUserRole={currentUser?.role}
+            />
+          )}
+
           {activeModule === 'ocorrencias' && (
             <IncidentLogView
               incidents={incidents}
@@ -967,6 +1160,7 @@ export default function App() {
               apartments={apartments}
               onUpdateApartment={handleUpdateApartment}
               onAddApartment={handleAddApartment}
+              onSyncOfficialApartments={handleSyncOfficialApartments}
             />
           )}
         </main>
@@ -991,6 +1185,13 @@ export default function App() {
           }}
           reservation={voucherReservation}
           onEdit={handleEditReservation}
+        />
+
+        {/* Direct WhatsApp Import Modal */}
+        <WhatsAppImportModal
+          isOpen={isWhatsAppDirectModalOpen}
+          onClose={() => setIsWhatsAppDirectModalOpen(false)}
+          onApplyData={handleApplyWhatsAppDirect}
         />
 
         {/* Data Management & Clear Mock Modal */}

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Flame, Utensils, Calendar, Plus, CheckCircle2, Clock, Search, X, CheckCheck, Ban, AlertCircle } from 'lucide-react';
+import { Flame, Utensils, Calendar, Plus, CheckCircle2, Clock, Search, X, CheckCheck, Ban, AlertCircle, Coffee } from 'lucide-react';
 import { AmenityReservation, AmenitySpace, AmenityStatus } from '../types.ts';
 import { BUILDING_APARTMENTS } from '../data/mockReservations.ts';
 
@@ -24,12 +24,14 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
     responsavel: string;
     data: string;
     periodo: AmenityReservation['periodo'];
+    observacoes: string;
   }>({
     espaco: 'salao',
     apto: '',
     responsavel: '',
     data: '2026-09-26',
-    periodo: 'almoco'
+    periodo: 'almoco',
+    observacoes: ''
   });
 
   const getEspacoInfo = (espaco: string) => {
@@ -41,6 +43,14 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
           badgeClass: 'bg-purple-50 text-purple-800 border-purple-200',
           horario: '08h00 às 00h00',
           icon: Utensils
+        };
+      case 'cyber_cafe':
+        return {
+          label: 'Cyber Café',
+          iconBg: 'bg-cyan-100 text-cyan-800',
+          badgeClass: 'bg-cyan-50 text-cyan-800 border-cyan-200',
+          horario: '07h00 às 22h00',
+          icon: Coffee
         };
       case 'churrasqueira_02':
         return {
@@ -120,8 +130,9 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
         const matchEspaco = espacoLabel.includes(q);
         const matchStatus = itemNormStatus.includes(q);
         const matchPeriodo = a.periodo.toLowerCase().includes(q);
+        const matchObs = a.observacoes ? a.observacoes.toLowerCase().includes(q) : false;
 
-        if (!matchApto && !matchResp && !matchData && !matchEspaco && !matchStatus && !matchPeriodo) {
+        if (!matchApto && !matchResp && !matchData && !matchEspaco && !matchStatus && !matchPeriodo && !matchObs) {
           return false;
         }
       }
@@ -166,6 +177,7 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
       responsavel: formData.responsavel,
       data: formData.data,
       periodo: formData.periodo,
+      observacoes: formData.observacoes.trim() || undefined,
       status: 'reservado'
     });
 
@@ -175,7 +187,8 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
       apto: '',
       responsavel: '',
       data: '2026-09-26',
-      periodo: 'almoco'
+      periodo: 'almoco',
+      observacoes: ''
     });
   };
 
@@ -202,6 +215,11 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
           <div className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200">
             <Clock className="w-3.5 h-3.5 text-purple-600" />
             <span>Salão: 08h00 às 00h00</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-cyan-50 text-cyan-800 border border-cyan-200">
+            <Coffee className="w-3.5 h-3.5 text-cyan-600" />
+            <span>Cyber Café: 07h00 às 22h00</span>
           </div>
 
           <div className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
@@ -242,6 +260,7 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
                 className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium"
               >
                 <option value="salao">Salão de Festas (08h00 às 00h00)</option>
+                <option value="cyber_cafe">Cyber Café (07h00 às 22h00)</option>
                 <option value="churrasqueira_01">Churrasqueira 01 (08h00 às 18h00)</option>
                 <option value="churrasqueira_02">Churrasqueira 02 (08h00 às 18h00)</option>
               </select>
@@ -409,6 +428,12 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
                     <option value="jantar">Jantar / Noite (16:00 às 00:00)</option>
                     <option value="dia_todo">Dia Todo (08:00 às 00:00)</option>
                   </>
+                ) : formData.espaco === 'cyber_cafe' ? (
+                  <>
+                    <option value="almoco">Manhã (07:00 às 12:00)</option>
+                    <option value="jantar">Tarde / Noite (13:00 às 22:00)</option>
+                    <option value="dia_todo">Dia Todo (07:00 às 22:00)</option>
+                  </>
                 ) : (
                   <>
                     <option value="almoco">Manhã / Almoço (08:00 às 13:00)</option>
@@ -419,27 +444,40 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
               </select>
             </div>
 
-            <div className="flex items-end justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-3 py-2 text-xs text-slate-600 hover:text-slate-800 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={!!conflict}
-                className={`font-semibold text-xs px-5 py-2 rounded-lg transition-colors shadow-xs ${
-                  conflict
-                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-75'
-                    : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
-                }`}
-                title={conflict ? 'Não é possível gravar: data e horário já reservados' : 'Gravar Reserva'}
-              >
-                {conflict ? 'Horário Já Reservado' : 'Gravar Reserva'}
-              </button>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                Observações
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Aniversário, convidados externos, som, etc."
+                value={formData.observacoes}
+                onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-amber-500 focus:outline-none placeholder:text-slate-400 bg-white"
+              />
             </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={!!conflict}
+              className={`font-semibold text-xs px-5 py-2 rounded-lg transition-colors shadow-xs ${
+                conflict
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-75'
+                  : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
+              }`}
+              title={conflict ? 'Não é possível gravar: data e horário já reservados' : 'Gravar Reserva'}
+            >
+              {conflict ? 'Horário Já Reservado' : 'Gravar Reserva'}
+            </button>
           </div>
         </form>
       )}
@@ -588,6 +626,11 @@ export const PartyHallView: React.FC<PartyHallViewProps> = ({
                       <p className="text-xs text-slate-600 mt-0.5">
                         Responsável: <strong className="text-slate-800">{item.responsavel}</strong>
                       </p>
+                      {item.observacoes && (
+                        <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200/80 rounded-md px-2 py-0.5 mt-1 inline-block max-w-md">
+                          <span className="font-semibold text-amber-950">Obs:</span> {item.observacoes}
+                        </p>
+                      )}
                     </div>
                   </div>
 

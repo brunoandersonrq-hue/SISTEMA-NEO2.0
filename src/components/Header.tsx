@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, History, PlusCircle, BarChart3, Percent, Menu, Database, User } from 'lucide-react';
+import { Calendar, History, PlusCircle, BarChart3, Percent, Menu, Database, User, MessageCircle } from 'lucide-react';
 import { UserAccount } from '../types.ts';
 
 export type ViewMode = 'calendar' | 'occupancy' | 'history';
@@ -8,6 +8,7 @@ interface HeaderProps {
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   onNewReservation: () => void;
+  onImportWhatsApp?: () => void;
   occupiedCount: number;
   totalBuildingAptos?: number;
   occupancyRate: string | number;
@@ -21,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentView,
   onViewChange,
   onNewReservation,
+  onImportWhatsApp,
   occupiedCount,
   totalBuildingAptos = 124,
   occupancyRate,
@@ -153,6 +155,21 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="max-w-[100px] truncate hidden md:inline font-bold">
                   {currentUser.nome || currentUser.username}
                 </span>
+              </button>
+            )}
+
+            {/* WhatsApp Import Button */}
+            {onImportWhatsApp && (
+              <button
+                type="button"
+                id="btn-import-whatsapp"
+                onClick={onImportWhatsApp}
+                title="Colar dados de ficha recebida pelo WhatsApp e preencher automaticamente"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors cursor-pointer"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="hidden sm:inline">Colar Ficha WhatsApp</span>
+                <span className="sm:hidden">WhatsApp</span>
               </button>
             )}
 

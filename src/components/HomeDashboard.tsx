@@ -10,9 +10,10 @@ import {
   Users,
   ArrowRight,
   Percent,
-  Database
+  Database,
+  KeyRound
 } from 'lucide-react';
-import { SystemModule, Reservation, PackageDelivery, IncidentRecord, AmenityReservation } from '../types.ts';
+import { SystemModule, Reservation, PackageDelivery, IncidentRecord, AmenityReservation, KeyControlRecord } from '../types.ts';
 
 interface HomeDashboardProps {
   onNavigate: (module: SystemModule) => void;
@@ -20,6 +21,7 @@ interface HomeDashboardProps {
   packages: PackageDelivery[];
   incidents: IncidentRecord[];
   amenities: AmenityReservation[];
+  keyRecords?: KeyControlRecord[];
   totalBuildingAptos: number;
   onOpenDataManagement?: () => void;
 }
@@ -30,6 +32,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   packages,
   incidents,
   amenities,
+  keyRecords = [],
   totalBuildingAptos,
   onOpenDataManagement
 }) => {
@@ -44,6 +47,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const pendingPackages = packages.filter((p) => p.status === 'aguardando');
   const pendingIncidents = incidents.filter((i) => i.status !== 'resolvida');
   const upcomingAmenities = amenities.filter((a) => a.status === 'confirmada');
+  const pendingKeys = keyRecords.filter((k) => !k.devolucao);
 
   const modules = [
     {
@@ -84,7 +88,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     {
       id: 'churrasqueira' as SystemModule,
       title: 'Reserva de Espaços Comuns',
-      description: 'Salão de Festas (08h às 00h) e Churrasqueiras 01 e 02 (08h às 18h), consulta de datas disponíveis e regras de uso.',
+      description: 'Salão de Festas (08h às 00h), Cyber Café (07h às 22h) e Churrasqueiras 01 e 02 (08h às 18h), consulta de datas disponíveis e regras de uso.',
       icon: Flame,
       badge: `${upcomingAmenities.length} eventos agendados`,
       badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
@@ -98,6 +102,15 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       badge: `${pendingPackages.length} aguardando retirada`,
       badgeColor: pendingPackages.length > 0 ? 'bg-rose-100 text-rose-800 border-rose-300 font-bold' : 'bg-slate-100 text-slate-700',
       actionText: 'Gerenciar Encomendas'
+    },
+    {
+      id: 'chaves' as SystemModule,
+      title: 'Controle de Chaves',
+      description: 'Retiradas e devoluções de chaves da portaria com controle de apto, quem retirou, data e hora editáveis e observações.',
+      icon: KeyRound,
+      badge: `${pendingKeys.length} chave${pendingKeys.length !== 1 ? 's' : ''} em uso`,
+      badgeColor: pendingKeys.length > 0 ? 'bg-amber-100 text-amber-800 border-amber-300 font-bold' : 'bg-emerald-100 text-emerald-800',
+      actionText: 'Controlar Chaves'
     },
     {
       id: 'ocorrencias' as SystemModule,

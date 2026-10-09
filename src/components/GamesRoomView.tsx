@@ -26,7 +26,8 @@ export const GamesRoomView: React.FC<GamesRoomViewProps> = ({
     apto: '',
     responsavel: '',
     mesa: 'kit bolas + 04 tacos' as GameTurn['mesa'],
-    horario: '2026-09-22'
+    horario: '2026-09-22',
+    observacoes: ''
   });
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -56,7 +57,7 @@ export const GamesRoomView: React.FC<GamesRoomViewProps> = ({
         const matchApto = t.apto.toLowerCase().includes(query);
         const matchResp = t.responsavel.toLowerCase().includes(query);
         const matchMesa = t.mesa.toLowerCase().includes(query);
-        const matchObs = (t.observacaoDevolucao || '').toLowerCase().includes(query);
+        const matchObs = ((t.observacoes || '') + ' ' + (t.observacaoDevolucao || '')).toLowerCase().includes(query);
         const matchData = (t.dataDevolucao || '').toLowerCase().includes(query) || t.horario.includes(query);
         return matchApto || matchResp || matchMesa || matchObs || matchData;
       }
@@ -73,14 +74,15 @@ export const GamesRoomView: React.FC<GamesRoomViewProps> = ({
       responsavel: newTurn.responsavel,
       mesa: newTurn.mesa,
       horario: newTurn.horario,
-      status: 'em_uso'
+      status: 'em_uso',
+      observacoes: newTurn.observacoes.trim() || undefined
     };
     if (onAddTurn) {
       onAddTurn(newEntry);
     } else {
       setLocalTurns((prev) => [...prev, newEntry]);
     }
-    setNewTurn({ apto: '', responsavel: '', mesa: 'kit bolas + 04 tacos', horario: '2026-09-22' });
+    setNewTurn({ apto: '', responsavel: '', mesa: 'kit bolas + 04 tacos', horario: '2026-09-22', observacoes: '' });
     setShowAddForm(false);
   };
 
@@ -219,6 +221,16 @@ export const GamesRoomView: React.FC<GamesRoomViewProps> = ({
                 required
               />
             </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-slate-700 block mb-1">Observações (Opcional)</label>
+            <input
+              type="text"
+              placeholder="Ex: Apenas 2 tacos emprestados, autorização especial, conferir na entrega..."
+              value={newTurn.observacoes}
+              onChange={(e) => setNewTurn({ ...newTurn, observacoes: e.target.value })}
+              className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+            />
           </div>
           <div className="flex justify-end gap-2">
             <button
@@ -406,6 +418,14 @@ export const GamesRoomView: React.FC<GamesRoomViewProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {/* Observations on checkout */}
+                  {t.observacoes && (
+                    <div className="text-[11px] text-slate-600 flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1 w-fit">
+                      <span className="font-semibold text-slate-700">Obs:</span>
+                      <span>{t.observacoes}</span>
+                    </div>
+                  )}
 
                   {/* Observations if returned */}
                   {t.observacaoDevolucao && (

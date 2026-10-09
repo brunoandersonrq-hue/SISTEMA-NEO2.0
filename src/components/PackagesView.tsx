@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Package,
   Search,
@@ -14,7 +14,10 @@ import {
   ExternalLink,
   Copy,
   Check,
-  Phone
+  Phone,
+  PenLine,
+  RotateCcw,
+  FileSignature
 } from 'lucide-react';
 import { PackageDelivery, ApartmentProfile } from '../types.ts';
 import { BUILDING_APARTMENTS } from '../data/mockReservations.ts';
@@ -30,13 +33,14 @@ const getCleanPhone = (phone?: string) => {
 };
 
 const generateWhatsAppPackageMessage = (
-  pkg: { apto: string; destinatario: string; transportadora: string; dataChegada: string },
+  pkg: { apto: string; destinatario: string; transportadora: string; dataChegada: string; observacoes?: string },
   profile?: ApartmentProfile
 ) => {
   const nomeMorador = profile?.proprietario ? profile.proprietario : pkg.destinatario;
   const dataFormatada = formatBrasiliaDateTime(pkg.dataChegada, false);
+  const obsLine = pkg.observacoes ? `\n• *Observações:* ${pkg.observacoes}` : '';
 
-  return `Olá, *${nomeMorador}* (Apto *${pkg.apto}*)! 📦\n\nInformamos que chegou uma encomenda para você na Recepção / Portaria do Condomínio.\n\n• *Destinatário:* ${pkg.destinatario}\n• *Transportadora:* ${pkg.transportadora}\n• *Data/Hora de Chegada:* ${dataFormatada}\n\nPor favor, compareça à recepção para retirada portando documento de identificação.\n\nAtenciosamente,\n*Portaria & Recepção do Condomínio*`;
+  return `Olá, *${nomeMorador}* (Apto *${pkg.apto}*)! 📦\n\nInformamos que chegou uma encomenda para você na Recepção / Portaria do Condomínio.\n\n• *Destinatário:* ${pkg.destinatario}\n• *Transportadora:* ${pkg.transportadora}\n• *Data/Hora de Chegada:* ${dataFormatada}${obsLine}\n\nPor favor, compareça à recepção para retirada portando documento de identificação.\n\nAtenciosamente,\n*Portaria & Recepção do Condomínio*`;
 };
 
 const getWhatsAppUrl = (phone: string, text: string) => {
@@ -44,10 +48,170 @@ const getWhatsAppUrl = (phone: string, text: string) => {
   return `https://wa.me/${clean}?text=${encodeURIComponent(text)}`;
 };
 
+/**
+ * Componente de assinatura touch para smartphones, tablets e desktop
+ */
+const SignaturePad: React.FC<{
+  value?: string;
+  onChange: (dataUrl: string) => void;
+}> = ({ value, onChange }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(!!value);
+
+  // Inicializa o canvas com suporte a Retina/alta resolução (DPI)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
+    ctx.scale(ratio, ratio);
+
+    ctx.strokeStyle = '#0f172a'; // slate-900
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Se já houver assinatura prévia salva
+    if (value) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      };
+      img.src = value;
+      setHasDrawn(true);
+    }
+  }, []);
+
+  const getCoordinates = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignorar caso o navegador não suporte pointer capture
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const coords = getCoordinates(e);
+    ctx.beginPath();
+    ctx.moveTo(coords.x, coords.y);
+    setIsDrawing(true);
+    setHasDrawn(true);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const coords = getCoordinates(e);
+    ctx.lineTo(coords.x, coords.y);
+    ctx.stroke();
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      canvas.releasePointerCapture(e.pointerId);
+    } catch {
+      // Fallback
+    }
+    onChange(canvas.toDataURL('image/png'));
+  };
+
+  const handleClear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    ctx.clearRect(0, 0, canvas.width / ratio, canvas.height / ratio);
+    setHasDrawn(false);
+    onChange('');
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+          <PenLine className="w-3.5 h-3.5 text-emerald-700" />
+          <span>Assinatura / Rubrica de Quem Retirou</span>
+          <span className="text-[10px] text-slate-400 font-normal">(assine na tela com o dedo)</span>
+        </label>
+        {hasDrawn && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Limpar / Rubricar Novamente</span>
+          </button>
+        )}
+      </div>
+
+      <div
+        className="relative border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50 overflow-hidden select-none hover:border-emerald-400 transition-colors"
+        style={{ touchAction: 'none' }}
+      >
+        <canvas
+          ref={canvasRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          style={{ touchAction: 'none' }}
+          className="w-full h-32 block cursor-crosshair bg-white"
+        />
+
+        {/* Guia visual enquanto o usuário não assinou */}
+        {!hasDrawn && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-slate-400 p-2">
+            <PenLine className="w-5 h-5 mb-1 text-slate-300" />
+            <p className="text-xs font-semibold text-slate-500">
+              Assine ou rubrique aqui com o dedo ou caneta
+            </p>
+            <p className="text-[10px] text-slate-400">
+              Toque e deslize direto na tela do celular
+            </p>
+          </div>
+        )}
+
+        {/* Linha de base discreta para alinhamento da assinatura */}
+        <div className="absolute bottom-6 left-4 right-4 border-b border-dashed border-slate-300/80 pointer-events-none" />
+      </div>
+    </div>
+  );
+};
+
 interface PackagesViewProps {
   packages: PackageDelivery[];
   onAddPackage: (pkg: PackageDelivery) => void;
-  onDeliverPackage: (id: string, retiradoPor: string, dataRetirada?: string) => void;
+  onDeliverPackage: (id: string, retiradoPor: string, dataRetirada?: string, assinatura?: string) => void;
   onUpdatePackage?: (pkg: PackageDelivery) => void;
   apartments?: ApartmentProfile[];
   onUpdateApartment?: (updated: ApartmentProfile) => void;
@@ -82,6 +246,8 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
   const [deliveringPackage, setDeliveringPackage] = useState<PackageDelivery | null>(null);
   const [retiradoPor, setRetiradoPor] = useState('');
   const [dataHoraRetirada, setDataHoraRetirada] = useState('');
+  const [assinatura, setAssinatura] = useState('');
+  const [viewingSignature, setViewingSignature] = useState<PackageDelivery | null>(null);
 
   // WhatsApp Notification State
   const [notifyWhatsApp, setNotifyWhatsApp] = useState(true);
@@ -92,6 +258,7 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
       destinatario: string;
       transportadora: string;
       dataChegada: string;
+      observacoes?: string;
     };
     profile?: ApartmentProfile;
     url: string;
@@ -104,7 +271,8 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
     destinatario: '',
     transportadora: 'Mercado Livre',
     dataChegada: getBrasiliaCurrentDateTime(),
-    recebidoPor: 'Portaria Diurna'
+    recebidoPor: 'Portaria Diurna',
+    observacoes: ''
   });
 
   // Find apartment profile corresponding to currently typed apto in form
@@ -131,7 +299,8 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
       transportadora: formData.transportadora,
       dataChegada: formData.dataChegada,
       status: 'aguardando',
-      recebidoPor: formData.recebidoPor
+      recebidoPor: formData.recebidoPor,
+      observacoes: formData.observacoes.trim() || undefined
     };
 
     onAddPackage(newPkg);
@@ -157,7 +326,8 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
       destinatario: '',
       transportadora: 'Mercado Livre',
       dataChegada: getBrasiliaCurrentDateTime(),
-      recebidoPor: 'Portaria Diurna'
+      recebidoPor: 'Portaria Diurna',
+      observacoes: ''
     });
   };
 
@@ -185,6 +355,7 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
   const handleStartDelivery = (item: PackageDelivery) => {
     setDeliveringPackage(item);
     setRetiradoPor(item.retiradoPor || item.destinatario);
+    setAssinatura(item.assinatura || '');
     
     // If it already has a withdrawal date, use it; otherwise use current Brasília time
     if (item.dataRetirada) {
@@ -204,12 +375,14 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
     onDeliverPackage(
       deliveringPackage.id,
       retiradoPor.trim(),
-      dataHoraRetirada || getBrasiliaCurrentDateTime()
+      dataHoraRetirada || getBrasiliaCurrentDateTime(),
+      assinatura || undefined
     );
 
     setDeliveringPackage(null);
     setRetiradoPor('');
     setDataHoraRetirada('');
+    setAssinatura('');
   };
 
   const filtered = packages.filter((p) => {
@@ -217,6 +390,7 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
       p.apto.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.destinatario.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.transportadora.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.observacoes && p.observacoes.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (p.retiradoPor && p.retiradoPor.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus = filterStatus === 'todos' || p.status === filterStatus;
@@ -377,6 +551,20 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
             </div>
           </div>
 
+          {/* Campo de Observações */}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+              Observações (Opcional)
+            </label>
+            <input
+              type="text"
+              placeholder="Ex: Caixa volumosa, pacote frágil, envelope pardo, prateleira B da portaria, avisar com urgência..."
+              value={formData.observacoes}
+              onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+              className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium bg-white placeholder:font-normal"
+            />
+          </div>
+
           {/* Smart Resident Identification Banner */}
           {matchedAptoProfile ? (
             <div className="bg-emerald-50/90 border border-emerald-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-fadeIn">
@@ -484,10 +672,10 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
 
       {/* Delivery / Withdrawal Modal (Data e Hora de Retirada em Horário de Brasília Editável) */}
       {deliveringPackage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4 animate-fadeIn">
           <form
             onSubmit={handleConfirmDelivery}
-            className="bg-white rounded-2xl p-6 shadow-xl max-w-md w-full space-y-4 animate-scaleUp border border-slate-200"
+            className="bg-white rounded-2xl p-5 sm:p-6 shadow-2xl max-w-lg w-full space-y-4 animate-scaleUp border border-slate-200 max-h-[92vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -513,6 +701,12 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
                 <span>Data de Chegada na Portaria:</span>
                 <span className="font-medium text-slate-800">{formatBrasiliaDateTime(deliveringPackage.dataChegada, false)}</span>
               </div>
+              {deliveringPackage.observacoes && (
+                <div className="text-slate-600 flex justify-between pt-1 border-t border-slate-200/60">
+                  <span className="font-medium text-slate-700">Observações:</span>
+                  <span className="text-slate-800 font-medium">{deliveringPackage.observacoes}</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -546,13 +740,21 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
                   Pré-preenchido no Horário Oficial de Brasília. Você pode editar data e hora livremente.
                 </span>
               </div>
+
+              {/* Assinatura / Rubrica Digital do Recebedor na Tela do Celular */}
+              <div className="pt-2 border-t border-slate-100">
+                <SignaturePad
+                  value={assinatura}
+                  onChange={(sig) => setAssinatura(sig)}
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setDeliveringPackage(null)}
-                className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
               >
                 Cancelar
               </button>
@@ -645,11 +847,31 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
                       Chegada: {formatBrasiliaDateTime(item.dataChegada, false)}
                     </span>
                     {item.status === 'retirado' && (
-                      <span className="text-emerald-700 font-medium">
-                        ✓ Retirado por: {item.retiradoPor} em {formatBrasiliaDateTime(item.dataRetirada, false)}
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-emerald-700 font-medium">
+                          ✓ Retirado por: {item.retiradoPor} em {formatBrasiliaDateTime(item.dataRetirada, false)}
+                        </span>
+                        {item.assinatura && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingSignature(item)}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                            title="Ver assinatura/rubrica digital coletada na entrega"
+                          >
+                            <PenLine className="w-3 h-3 text-blue-600" />
+                            <span>Ver Assinatura</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
+
+                  {item.observacoes && (
+                    <div className="text-[11px] text-slate-600 mt-1.5 flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 rounded-md px-2 py-0.5 w-fit">
+                      <span className="font-bold text-slate-700">Obs:</span>
+                      <span className="text-slate-600 font-medium">{item.observacoes}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -677,11 +899,22 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-full flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Entregue</span>
                     </span>
+                    {item.assinatura && (
+                      <button
+                        type="button"
+                        onClick={() => setViewingSignature(item)}
+                        className="text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1"
+                        title="Ver assinatura do recebedor"
+                      >
+                        <PenLine className="w-3 h-3" />
+                        <span>Assinatura</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleStartDelivery(item)}
@@ -689,7 +922,7 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
                       title="Editar dados da retirada"
                     >
                       <Edit2 className="w-3 h-3" />
-                      <span>Editar Retirada</span>
+                      <span>Editar</span>
                     </button>
                   </div>
                 )}
@@ -760,6 +993,12 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
                 <span className="text-slate-500">Transportadora:</span>
                 <span className="font-medium text-slate-800">{whatsAppModalData.pkg.transportadora}</span>
               </div>
+              {whatsAppModalData.pkg.observacoes && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Observações:</span>
+                  <span className="font-medium text-slate-800">{whatsAppModalData.pkg.observacoes}</span>
+                </div>
+              )}
             </div>
 
             {/* Message preview speech bubble */}
@@ -828,6 +1067,82 @@ export const PackagesView: React.FC<PackagesViewProps> = ({
                   <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                 </a>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Visualização do Comprovante de Assinatura */}
+      {viewingSignature && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-2xl max-w-md w-full space-y-4 border border-slate-200 animate-scaleUp">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-100 text-blue-700">
+                  <PenLine className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">
+                    Comprovante de Retirada com Assinatura
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Apto {viewingSignature.apto} • {viewingSignature.destinatario}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingSignature(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Destinatário:</span>
+                <span className="font-bold text-slate-900">{viewingSignature.destinatario}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Retirado Por:</span>
+                <span className="font-bold text-emerald-800">{viewingSignature.retiradoPor}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Data e Hora:</span>
+                <span className="font-medium text-slate-700">{formatBrasiliaDateTime(viewingSignature.dataRetirada, false)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Transportadora:</span>
+                <span className="font-medium text-slate-700">{viewingSignature.transportadora}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                Rubrica / Assinatura Digital Coletada na Portaria:
+              </span>
+              <div className="bg-white border-2 border-slate-200 rounded-xl p-3 flex items-center justify-center min-h-[140px] shadow-inner">
+                {viewingSignature.assinatura ? (
+                  <img
+                    src={viewingSignature.assinatura}
+                    alt={`Assinatura de ${viewingSignature.retiradoPor}`}
+                    className="max-h-36 max-w-full object-contain filter contrast-125"
+                  />
+                ) : (
+                  <span className="text-xs text-slate-400 italic">Nenhuma assinatura registrada</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setViewingSignature(null)}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 text-white cursor-pointer transition-colors"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>

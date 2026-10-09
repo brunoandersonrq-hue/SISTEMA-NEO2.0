@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   Database,
   User,
-  LogOut
+  LogOut,
+  KeyRound
 } from 'lucide-react';
 import { SystemModule, UserAccount } from '../types.ts';
 
@@ -27,6 +28,7 @@ interface SidebarProps {
   activeGuestsCount: number;
   pendingPackagesCount: number;
   pendingIncidentsCount: number;
+  pendingKeysCount?: number;
   totalBuildingAptos?: number;
   onOpenDataManagement?: () => void;
   currentUser?: UserAccount;
@@ -42,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeGuestsCount,
   pendingPackagesCount,
   pendingIncidentsCount,
+  pendingKeysCount = 0,
   totalBuildingAptos = 124,
   onOpenDataManagement,
   currentUser,
@@ -88,8 +91,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'churrasqueira',
-      label: 'Salão & Churrasqueira',
-      description: 'Reserva de Espaços Comuns',
+      label: 'Espaços & Reservas',
+      description: 'Salão, Cyber Café & Churrasq.',
       icon: Flame
     },
     {
@@ -98,6 +101,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: 'Portaria & Entregas',
       icon: Package,
       badge: pendingPackagesCount > 0 ? { text: `${pendingPackagesCount} pendente${pendingPackagesCount > 1 ? 's' : ''}`, color: 'bg-amber-500 text-slate-950 font-bold' } : undefined
+    },
+    {
+      id: 'chaves',
+      label: 'Controle de Chaves',
+      description: 'Retiradas, Devoluções & Apto',
+      icon: KeyRound,
+      badge: pendingKeysCount > 0 ? { text: `${pendingKeysCount} em uso`, color: 'bg-amber-500 text-slate-950 font-bold' } : undefined
     },
     {
       id: 'ocorrencias',

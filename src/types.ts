@@ -54,6 +54,7 @@ export type SystemModule =
   | 'academia'
   | 'churrasqueira'
   | 'encomendas'
+  | 'chaves'
   | 'ocorrencias'
   | 'cadastros';
 
@@ -94,6 +95,8 @@ export interface PackageDelivery {
   retiradoPor?: string;
   dataRetirada?: string;
   recebidoPor: string;
+  assinatura?: string;
+  observacoes?: string;
 }
 
 export interface IncidentRecord {
@@ -108,7 +111,7 @@ export interface IncidentRecord {
   observacaoSindico?: string;
 }
 
-export type AmenitySpace = 'salao' | 'churrasqueira_01' | 'churrasqueira_02';
+export type AmenitySpace = 'salao' | 'churrasqueira_01' | 'churrasqueira_02' | 'cyber_cafe';
 
 export type AmenityStatus = 'reservado' | 'cancelado' | 'realizado' | 'confirmada' | 'pendente';
 
@@ -121,6 +124,7 @@ export interface AmenityReservation {
   periodo: 'almoco' | 'jantar' | 'dia_todo';
   convidadosPrevistos?: number;
   status: AmenityStatus;
+  observacoes?: string;
 }
 
 export type ApartmentType = 'morador' | 'inquilino' | 'temporada';
@@ -157,6 +161,7 @@ export interface GameTurn {
   mesa: 'kit bolas + 04 tacos' | 'Ludo' | 'Dominó' | 'Xadrez' | 'Dama' | string;
   horario: string;
   status: 'em_uso' | 'devolvido';
+  observacoes?: string;
   observacaoDevolucao?: string;
   dataDevolucao?: string;
   teveNaoConformidade?: boolean;
@@ -169,9 +174,26 @@ export interface GymKeyTurn {
   item: 'Chave Principal da Academia' | 'Cartão de Acesso / Tag' | 'Chave Armário / Vestiário' | string;
   horario: string;
   status: 'em_uso' | 'devolvido';
+  observacoes?: string;
   observacaoDevolucao?: string;
   dataDevolucao?: string;
   teveNaoConformidade?: boolean;
+}
+
+export interface KeyControlRecord {
+  id: string;
+  apto: string; // apto
+  quemRetirou: string; // quem retirou
+  dataHoraRetirada: string; // data e hora (editavel) - Formato ISO ou YYYY-MM-DDTHH:mm
+  devolucao: boolean; // devolução (true = devolvido, false = pendente/em uso)
+  quemDevolveu?: string; // quem entregou na devolução
+  dataHoraDevolucao?: string; // data e hora (editavel) - Formato ISO ou YYYY-MM-DDTHH:mm
+  observacoes?: string; // observações
+  chaveIdentificacao?: string; // ex: "Chave Principal", "Tag / Portão", "Cópia 02"
+  porteiroRetirada?: string; // operador que entregou
+  porteiroDevolucao?: string; // operador que recebeu
+  criadoEm?: string;
+  atualizadoEm?: string;
 }
 
 
